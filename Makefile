@@ -1,8 +1,8 @@
 # On Bridges we will check versus your performance versus Intel MKL library's BLAS. 
 
 CC = gcc 
-OPT = -g
-#OPT = -O3 -g
+#OPT = -g
+OPT = -O3 -g
 #OPT = -g -fopenmp
 #CFLAGS = -Wall -std=gnu99 -mfma -mavx2 -funroll-loops -ftree-vectorize -fstrict-aliasing -ffast-math $(OPT)
 CFLAGS = -Wall -std=gnu99 -funroll-loops -ftree-vectorize  -fstrict-aliasing -ffast-math $(OPT)

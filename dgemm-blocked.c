@@ -38,7 +38,7 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 //#define L2_SIZE_BYTES 12582912
 //#define L2_SIZE_BYTES 25165824
 //#define L2_SIZE_BYTES 262144
-#define L2_SIZE_BYTES 81920
+#define L2_SIZE_BYTES 8192
 #define L2_SQURED L2_SIZE_BYTES/2/sizeof(double)
 #endif
 
@@ -228,66 +228,11 @@ inline static void do_block (const int lda, const int M, const int N, const int 
 void square_dgemm (int lda, const double* A, const double* B, double* C)
 {
 
-  int BLOCK_SIZE = sqrt(L2_SQURED);
+  //int BLOCK_SIZE = sqrt(L2_SQURED);
+  //int BLOCK_SIZE = L2_SQURED;
+  //int BLOCK_SIZE = 8192;
+  int BLOCK_SIZE = 1024;
   //https://gcc.gnu.org/onlinedocs/gcc/Restricted-Pointers.html  // __restrict__ 
-  // double* buf = (double*)calloc(4*lda*lda, sizeof(double));
-  // //buf = (double*) malloc (3 * lda * lda * sizeof(double));
-  // //buf = (double*) malloc (3 * lda * lda * sizeof(double));
-
-  // //transpose_block_AVX4x4(A, buf, lda, lda,lda,16);
-  // //transpose(A, buf, lda);
-  // //transpose_block_AVX4x4(A, buf, lda,4);
-
-  // // printf("Orginal Matrix");
-  // // printf("\n");
-  // // printMatrix(lda,A);
-
-  // // printf("\n");
-  // // printf("\n");
-  // // printf("\n");
-
-  // // printf("Orginal Matrix Linear");
-  // // printf("\n");
-  // // printMatrixLinear(lda,A );
-
-  // // printf("\n");
-  // // printf("Transposed Matrix");
-  // // printf("\n");
-
-  // // printMatrix(lda,buf);
-  // // printf("\n");
-  // // printf("\n");
-  // // printf("\n");
-  // // printf("Transposed Matrix Linear");
-  // // printf("\n");
-
-  // // printMatrixLinear(lda,buf);
-  // // //#pragma omp parallel for
-
-  // /* For each block-row of A */
-  // ///////////////////////////////////// L2 ////////////////////////////////////////////////////////////
-  // // for(int i_L2 = 0; i_L2 < lda; i_L2 += BLOCK_SIZE_L2)
-  // // {
-  // //   int M_L2 = min (BLOCK_SIZE_L2, lda-i_L2);
-  // //   int N_L2 = 0;
-  // //   int K_L2 = 0;
-  // //   for (int j_L2 = 0; j_L2 < lda; j_L2 += BLOCK_SIZE_L2)
-  // //   {
-  // //      //Accumulate block dgemms into block of C 
-  // //     N_L2 = min (BLOCK_SIZE_L2, lda-j_L2);
-
-  // //     for (int k_L2 = 0; k_L2 < lda; k_L2 += BLOCK_SIZE)
-  // //     {
-  // //        //Correct block dimensions if block "goes off edge of" the matrix 
-  // //       K_L2 = min (BLOCK_SIZE_L2, lda-k_L2);
-
-  // //       //////////////////////////////////////////////////// L1 ///////////////////////////////////////////////
-        
-  // //     }// K-L2
-  // //   } //j_L2
-  // // } // i_L2
-  //   //#pragma omp parallel for //numthreads(4) //<-- this really slows it down
-  //   //#pragma unroll
 
     int M = 0;
     int K = 0;
@@ -303,13 +248,18 @@ void square_dgemm (int lda, const double* A, const double* B, double* C)
       {
         //Correct block dimensions if block "goes off edge of" the matrix 
         K = min (BLOCK_SIZE, lda-k_Block);
-        double B_Block[(K+1)*(N*lda)];
+        //double B_Block[(K+1)*(N*lda)];
+        double * B_Block = (double*)calloc((K+1)*(N*lda), sizeof(double));
+        
         ////load a block of Matrix B into memory. Loading by columns 
         for (int J_load = 0; J_load < N; ++J_load)
         {
           for (int K_load = 0; K_load < K; ++K_load)
           {
-              B_Block[K_load + J_load*lda ] =  B[k_Block + K_load +J_load*lda];
+            int Index = K_load + J_load*lda ;
+            B_Block[Index] = B[k_Block + Index];
+             
+              //B_Block[Index] =  B[k_Block + Index];
           } 
         } 
 
@@ -318,7 +268,8 @@ void square_dgemm (int lda, const double* A, const double* B, double* C)
                 // redeclare everything as less as possible
           M = min (BLOCK_SIZE, lda-i_Block);
 
-          double A_Block[(K+1) *(M+1)];
+          //double A_Block[(K+1) *(M+1)];
+          double * A_Block = (double*)calloc((K+1)*(M*lda), sizeof(double));
           ////load a block of Matrix A into memory. Loading by columns into ROWS!
           // The loaded Block is TRANSVERSE OF MATRIX BLOCK A 
           for(int I_load = 0; I_load < M; ++I_load)
@@ -335,65 +286,70 @@ void square_dgemm (int lda, const double* A, const double* B, double* C)
                 // A addressed by row so A is incremented by lda plus offset. A is jumping across the cache. 
                 //do_block(lda, M, N, K, A + i + k*lda, B + k + j*lda, C + i + j*lda);
                 //cij += A[i+k*lda] * B[k+j*lda];
-                //do_block(lda, M, N, K, A_Block + k_Block + i_Block*lda, B_Block + k_Block + j_mul, C + i_Block + j_mul);
+                do_block(lda, M, N, K, A_Block + k_Block + i_Block*lda, B_Block + k_Block + j_mul, C + i_Block + j_mul);
 
                 // let's try to vectorize by 4 at first!!!!
-                for(int j = 0; j<N; j+=4)
-                {
+                // for(int j = 0; j<N; j+=4)
+                // {
 
-                  //int B_index_mul = j*lda;
-                  //int C_index_mul = (j+j_Block) *lda;
+                //   //int B_index_mul = j*lda;
+                //   //int C_index_mul = (j+j_Block) *lda;
 
-                  for(int i=0; i<M; i+=2)
-                  {
-                      // load into local variables. 
-                      double C_Partial_0 = 0;
-                      double C_Partial_1 = 0;
-                      double C_Partial_2 = 0;
-                      double C_Partial_3 = 0;
-                      double C_Partial_4 = 0;
-                      double C_Partial_5 = 0;
-                      double C_Partial_6 = 0;
-                      double C_Partial_7 = 0;
-                      double Aelement = 0;
-                      double Aelement1 = 0;
+                //   for(int i=0; i<M; i+=2)
+                //   {
+                //       // load into local variables. 
+                //       double C_Partial_0 = 0;
+                //       double C_Partial_1 = 0;
+                //       double C_Partial_2 = 0;
+                //       double C_Partial_3 = 0;
+                //       double C_Partial_4 = 0;
+                //       double C_Partial_5 = 0;
+                //       double C_Partial_6 = 0;
+                //       double C_Partial_7 = 0;
+                //       double Aelement = 0;
+                //       double Aelement1 = 0;
 
-                      // perform the Partial sums C = C + A*B
-                      for(int k = 0; k < K; ++k)
-                      {   //// THIS CAN BE REPLACED WITH FMA instructions!!!!
-                        /// cij += A[k+i*lda] * B[k+C_index_mul]; 
+                //       // perform the Partial sums C = C + A*B
+                //       for(int k = 0; k < K; ++k)
+                //       {   //// THIS CAN BE REPLACED WITH FMA instructions!!!!
+                //         /// cij += A[k+i*lda] * B[k+C_index_mul]; 
 
-                        Aelement = A_Block[k + i*lda];
-                        Aelement1 = A_Block[k + (i+ 1)*lda ];  
-                        C_Partial_0 += Aelement * B_Block[ k + j*lda];
-                        C_Partial_1 += Aelement1 * B_Block[ k + j*lda];
-                        C_Partial_2 += Aelement * B_Block[ k + (j +1) *lda ];
-                        C_Partial_3 += Aelement1 * B_Block[ k + (j +1) * lda ];
-                        C_Partial_4 += Aelement * B_Block[ k + (j + 2) * lda ];
-                        C_Partial_5 += Aelement1 * B_Block[ k + (j +2) * lda ];
-                        C_Partial_6 += Aelement * B_Block[ k + (j+ 3) * lda ];
-                        C_Partial_7 += Aelement1 * B_Block[ k + (j +3) * lda ];
+                //         Aelement = A_Block[k + i*lda];
+                //         Aelement1 = A_Block[k + (i+ 1)*lda ];  
+                //         C_Partial_0 += Aelement * B_Block[ k + j*lda];
+                //         C_Partial_1 += Aelement1 * B_Block[ k + j*lda];
+                //         C_Partial_2 += Aelement * B_Block[ k + (j +1) *lda ];
+                //         C_Partial_3 += Aelement1 * B_Block[ k + (j +1) * lda ];
+                //         C_Partial_4 += Aelement * B_Block[ k + (j + 2) * lda ];
+                //         C_Partial_5 += Aelement1 * B_Block[ k + (j +2) * lda ];
+                //         C_Partial_6 += Aelement * B_Block[ k + (j+ 3) * lda ];
+                //         C_Partial_7 += Aelement1 * B_Block[ k + (j +3) * lda ];
 
-                      } 
-                      // Sum elements in block 
-                      // C is column major ordered. 
-                      C[i_Block + i + (j+j_Block)*lda ] +=  C_Partial_0;
-                      C[i_Block + i + 1 + (j+j_Block) *lda] += C_Partial_1;
+                //       } 
+                //       // Sum elements in block 
+                //       // C is column major ordered. 
+                //       C[i_Block + i + (j+j_Block)*lda ] +=  C_Partial_0;
+                //       C[i_Block + i + 1 + (j+j_Block) *lda] += C_Partial_1;
                       
-                      C[i_Block + i + (j+j_Block + 1) *lda] +=  C_Partial_2;
-                      C[i_Block + i +1 + (j+j_Block + 1) *lda] +=  C_Partial_3;
+                //       C[i_Block + i + (j+j_Block + 1) *lda] +=  C_Partial_2;
+                //       C[i_Block + i +1 + (j+j_Block + 1) *lda] +=  C_Partial_3;
 
-                      C[i_Block + i + (j+j_Block + 2) *lda] +=  C_Partial_4;
-                      C[i_Block + i + 1 + (j+j_Block + 2) *lda] +=  C_Partial_5;
+                //       C[i_Block + i + (j+j_Block + 2) *lda] +=  C_Partial_4;
+                //       C[i_Block + i + 1 + (j+j_Block + 2) *lda] +=  C_Partial_5;
 
-                      C[i_Block + i + (j+j_Block + 3) *lda] +=  C_Partial_6 ;
-                      C[i_Block + i + 1 + (j+j_Block + 3) *lda] +=  C_Partial_7;
+                //       C[i_Block + i + (j+j_Block + 3) *lda] +=  C_Partial_6 ;
+                //       C[i_Block + i + 1 + (j+j_Block + 3) *lda] +=  C_Partial_7;
 
-                  }
+                //   }
 
-                }
+                // } /// end of the inner loop 
+
+             free(A_Block);
+
 
             }   //  for (int i = 0; i < lda; i += BLOCK_SIZE)
+              free(B_Block);
+
         } // end for (int k = 0; k < lda; k += BLOCK_SIZE)
     }  // end for (int j = 0; j < lda; j += BLOCK_SIZE)
 
