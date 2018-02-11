@@ -35,10 +35,10 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 // tilewidth = L2SizeInBytes/2/TileHeight/Sizeof(element)
 //#define L2_SIZE_BYTES 1048576
 //#define L2_SIZE_BYTES 6291456
-#define L2_SIZE_BYTES 12582912
+//#define L2_SIZE_BYTES 12582912
 //#define L2_SIZE_BYTES 25165824
 //#define L2_SIZE_BYTES 262144
-
+#define L2_SIZE_BYTES 81920
 #define L2_SQURED L2_SIZE_BYTES/2/sizeof(double)
 #endif
 
@@ -64,72 +64,72 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 // void transpose4x4_AVX(const double *InA, double *OutB, const int Dimlda);
 // //void transpose_block_AVX4x4(const double *src, double *dst, const int nN, const int blocksize);
 
-inline void transpose4x4_AVX(const double *InA, double *OutB, const int Dimlda)
-{
-  //https://www.codeproject.com/Articles/874396/Crunching-Numbers-with-AVX-and-AVX
-  //__m256d a,b,c,d;
-   // get rid of stupid & and unnessacery mul
-  // have an issue with memory alignme__restrict__ nt!!!!
-  __m256d row0 = _mm256_loadu_pd(InA);
-  __m256d row1 = _mm256_loadu_pd(InA + Dimlda );
-  __m256d row2 = _mm256_loadu_pd(InA + (Dimlda << 1) );
-  __m256d row3 = _mm256_loadu_pd(InA + 3*Dimlda );
+// inline void transpose4x4_AVX(const double *InA, double *OutB, const int Dimlda)
+// {
+//   //https://www.codeproject.com/Articles/874396/Crunching-Numbers-with-AVX-and-AVX
+//   //__m256d a,b,c,d;
+//    // get rid of stupid & and unnessacery mul
+//   // have an issue with memory alignme__restrict__ nt!!!!
+//   __m256d row0 = _mm256_loadu_pd(InA);
+//   __m256d row1 = _mm256_loadu_pd(InA + Dimlda );
+//   __m256d row2 = _mm256_loadu_pd(InA + (Dimlda << 1) );
+//   __m256d row3 = _mm256_loadu_pd(InA + 3*Dimlda );
 
-  __m256d tmp0 = _mm256_shuffle_pd((row0),(row1), 0x0);                    \
-  __m256d tmp2 = _mm256_shuffle_pd((row0),(row1), 0xF);                \
-  __m256d tmp1 = _mm256_shuffle_pd((row2),(row3), 0x0);                    \
-  __m256d tmp3 = _mm256_shuffle_pd((row2),(row3), 0xF);                \
-                                                               \
-  (row0) = _mm256_permute2f128_pd(tmp0, tmp1, 0x20);   \
-  (row1) = _mm256_permute2f128_pd(tmp2, tmp3, 0x20);   \
-  (row2) = _mm256_permute2f128_pd(tmp0, tmp1, 0x31);   \
-  (row3) = _mm256_permute2f128_pd(tmp2, tmp3, 0x31);   \
+//   __m256d tmp0 = _mm256_shuffle_pd((row0),(row1), 0x0);                    \
+//   __m256d tmp2 = _mm256_shuffle_pd((row0),(row1), 0xF);                \
+//   __m256d tmp1 = _mm256_shuffle_pd((row2),(row3), 0x0);                    \
+//   __m256d tmp3 = _mm256_shuffle_pd((row2),(row3), 0xF);                \
+//                                                                \
+//   (row0) = _mm256_permute2f128_pd(tmp0, tmp1, 0x20);   \
+//   (row1) = _mm256_permute2f128_pd(tmp2, tmp3, 0x20);   \
+//   (row2) = _mm256_permute2f128_pd(tmp0, tmp1, 0x31);   \
+//   (row3) = _mm256_permute2f128_pd(tmp2, tmp3, 0x31);   \
 
-  _mm256_storeu_pd(OutB, row0);
-  _mm256_storeu_pd(OutB + Dimlda, row1);
-  _mm256_storeu_pd(OutB + (Dimlda << 1), row2);
-  _mm256_storeu_pd(OutB + 3*Dimlda, row3);
+//   _mm256_storeu_pd(OutB, row0);
+//   _mm256_storeu_pd(OutB + Dimlda, row1);
+//   _mm256_storeu_pd(OutB + (Dimlda << 1), row2);
+//   _mm256_storeu_pd(OutB + 3*Dimlda, row3);
 
-}
-
-
-inline void transpose_block_AVX4x4(const double *In, double *Out, const int nN, const int mM, const int ldaSquare,const int block_size)
-{
-    //#pragma omp parallel for
-    for(int i=0; i<nN; i+=block_size)
-    {
-        for(int j=0; j<mM; j+=block_size)
-        {
-            int max_i2 = i+block_size < nN ? i + block_size : nN;
-            int max_j2 = j+block_size < mM ? j + block_size : mM;
-            for(int i2=i; i2<max_i2; i2+=4)
-            {
-                for(int j2=j; j2<max_j2; j2+=4)
-                {
-                    transpose4x4_AVX(&In[i2*ldaSquare +j2], &Out[j2*ldaSquare + i2], ldaSquare);
-                }
-            }
-        }
-    }
-}
+// }
 
 
-inline void transpose(const double *A, double * B, const int lda)
-{
-    //#pragma unroll(8)
-    int i, j;
-    //#pragma omp parallel for
-    for (j = 0; j < lda; j++)
-    {
-      int j_lda = j*lda;
-      for (i = 0; i < lda; i++) 
-      {
-          //B[i][j] = A[j][i];
-          B[i + j_lda] = A[j + i * lda];
+// inline void transpose_block_AVX4x4(const double *In, double *Out, const int nN, const int mM, const int ldaSquare,const int block_size)
+// {
+//     //#pragma omp parallel for
+//     for(int i=0; i<nN; i+=block_size)
+//     {
+//         for(int j=0; j<mM; j+=block_size)
+//         {
+//             int max_i2 = i+block_size < nN ? i + block_size : nN;
+//             int max_j2 = j+block_size < mM ? j + block_size : mM;
+//             for(int i2=i; i2<max_i2; i2+=4)
+//             {
+//                 for(int j2=j; j2<max_j2; j2+=4)
+//                 {
+//                     transpose4x4_AVX(&In[i2*ldaSquare +j2], &Out[j2*ldaSquare + i2], ldaSquare);
+//                 }
+//             }
+//         }
+//     }
+// }
 
-      }
-    }
-}
+
+// inline void transpose(const double *A, double * B, const int lda)
+// {
+//     //#pragma unroll(8)
+//     int i, j;
+//     //#pragma omp parallel for
+//     for (j = 0; j < lda; j++)
+//     {
+//       int j_lda = j*lda;
+//       for (i = 0; i < lda; i++) 
+//       {
+//           //B[i][j] = A[j][i];
+//           B[i + j_lda] = A[j + i * lda];
+
+//       }
+//     }
+// }
 
 /* This auxiliary subroutine performs a smaller dgemm operation
  *  C := C + A * B
@@ -230,103 +230,174 @@ void square_dgemm (int lda, const double* A, const double* B, double* C)
 
   int BLOCK_SIZE = sqrt(L2_SQURED);
   //https://gcc.gnu.org/onlinedocs/gcc/Restricted-Pointers.html  // __restrict__ 
-  double* buf = (double*)calloc(4*lda*lda, sizeof(double));
-  //buf = (double*) malloc (3 * lda * lda * sizeof(double));
-  //buf = (double*) malloc (3 * lda * lda * sizeof(double));
+  // double* buf = (double*)calloc(4*lda*lda, sizeof(double));
+  // //buf = (double*) malloc (3 * lda * lda * sizeof(double));
+  // //buf = (double*) malloc (3 * lda * lda * sizeof(double));
 
-  //transpose_block_AVX4x4(A, buf, lda, lda,lda,16);
-  transpose(A, buf, lda);
-  //transpose_block_AVX4x4(A, buf, lda,4);
+  // //transpose_block_AVX4x4(A, buf, lda, lda,lda,16);
+  // //transpose(A, buf, lda);
+  // //transpose_block_AVX4x4(A, buf, lda,4);
 
-  // printf("Orginal Matrix");
-  // printf("\n");
-  // printMatrix(lda,A);
+  // // printf("Orginal Matrix");
+  // // printf("\n");
+  // // printMatrix(lda,A);
 
-  // printf("\n");
-  // printf("\n");
-  // printf("\n");
+  // // printf("\n");
+  // // printf("\n");
+  // // printf("\n");
 
-  // printf("Orginal Matrix Linear");
-  // printf("\n");
-  // printMatrixLinear(lda,A );
+  // // printf("Orginal Matrix Linear");
+  // // printf("\n");
+  // // printMatrixLinear(lda,A );
 
-  // printf("\n");
-  // printf("Transposed Matrix");
-  // printf("\n");
+  // // printf("\n");
+  // // printf("Transposed Matrix");
+  // // printf("\n");
 
-  // printMatrix(lda,buf);
-  // printf("\n");
-  // printf("\n");
-  // printf("\n");
-  // printf("Transposed Matrix Linear");
-  // printf("\n");
+  // // printMatrix(lda,buf);
+  // // printf("\n");
+  // // printf("\n");
+  // // printf("\n");
+  // // printf("Transposed Matrix Linear");
+  // // printf("\n");
 
-  // printMatrixLinear(lda,buf);
-  // //#pragma omp parallel for
+  // // printMatrixLinear(lda,buf);
+  // // //#pragma omp parallel for
 
-  /* For each block-row of A */
-  ///////////////////////////////////// L2 ////////////////////////////////////////////////////////////
-  // for(int i_L2 = 0; i_L2 < lda; i_L2 += BLOCK_SIZE_L2)
-  // {
-  //   int M_L2 = min (BLOCK_SIZE_L2, lda-i_L2);
-  //   int N_L2 = 0;
-  //   int K_L2 = 0;
-  //   for (int j_L2 = 0; j_L2 < lda; j_L2 += BLOCK_SIZE_L2)
-  //   {
-  //      //Accumulate block dgemms into block of C 
-  //     N_L2 = min (BLOCK_SIZE_L2, lda-j_L2);
+  // /* For each block-row of A */
+  // ///////////////////////////////////// L2 ////////////////////////////////////////////////////////////
+  // // for(int i_L2 = 0; i_L2 < lda; i_L2 += BLOCK_SIZE_L2)
+  // // {
+  // //   int M_L2 = min (BLOCK_SIZE_L2, lda-i_L2);
+  // //   int N_L2 = 0;
+  // //   int K_L2 = 0;
+  // //   for (int j_L2 = 0; j_L2 < lda; j_L2 += BLOCK_SIZE_L2)
+  // //   {
+  // //      //Accumulate block dgemms into block of C 
+  // //     N_L2 = min (BLOCK_SIZE_L2, lda-j_L2);
 
-  //     for (int k_L2 = 0; k_L2 < lda; k_L2 += BLOCK_SIZE)
-  //     {
-  //        //Correct block dimensions if block "goes off edge of" the matrix 
-  //       K_L2 = min (BLOCK_SIZE_L2, lda-k_L2);
+  // //     for (int k_L2 = 0; k_L2 < lda; k_L2 += BLOCK_SIZE)
+  // //     {
+  // //        //Correct block dimensions if block "goes off edge of" the matrix 
+  // //       K_L2 = min (BLOCK_SIZE_L2, lda-k_L2);
 
-  //       //////////////////////////////////////////////////// L1 ///////////////////////////////////////////////
+  // //       //////////////////////////////////////////////////// L1 ///////////////////////////////////////////////
         
-  //     }// K-L2
-  //   } //j_L2
-  // } // i_L2
-    //#pragma omp parallel for //numthreads(4) //<-- this really slows it down
-    //#pragma unroll
-    for (int j = 0; j < lda; j += BLOCK_SIZE)
+  // //     }// K-L2
+  // //   } //j_L2
+  // // } // i_L2
+  //   //#pragma omp parallel for //numthreads(4) //<-- this really slows it down
+  //   //#pragma unroll
+
+    int M = 0;
+    int K = 0;
+    int N = 0;
+
+    for (int j_Block = 0; j_Block < lda; j_Block += BLOCK_SIZE)
     {
       /* Accumulate block dgemms into block of C */
-      int N = min (BLOCK_SIZE, lda-j);
-      int M = 0;
-      int K = 0;
-      int j_mul = j*lda;
+      N = min (BLOCK_SIZE, lda-j_Block);
+      int j_mul = j_Block*lda;
 
-
-      for (int k = 0; k < lda; k += BLOCK_SIZE)
+      for (int k_Block = 0; k_Block < lda; k_Block += BLOCK_SIZE)
       {
         //Correct block dimensions if block "goes off edge of" the matrix 
-        K = min (BLOCK_SIZE, lda-k);
+        K = min (BLOCK_SIZE, lda-k_Block);
+        double B_Block[(K+1)*(N*lda)];
+        ////load a block of Matrix B into memory. Loading by columns 
+        for (int J_load = 0; J_load < N; ++J_load)
+        {
+          for (int K_load = 0; K_load < K; ++K_load)
+          {
+              B_Block[K_load + J_load*lda ] =  B[k_Block + K_load +J_load*lda];
+          } 
+        } 
 
-        for (int i = 0; i < lda; i += BLOCK_SIZE)
+        for (int i_Block = 0; i_Block < lda; i_Block += BLOCK_SIZE)
         {
                 // redeclare everything as less as possible
-                M = min (BLOCK_SIZE, lda-i);
-                //int i_mul = i*lda;
-            /* For each block-column of B */
+          M = min (BLOCK_SIZE, lda-i_Block);
 
-              //double cij = C[i+j*lda];
+          double A_Block[(K+1) *(M+1)];
+          ////load a block of Matrix A into memory. Loading by columns into ROWS!
+          // The loaded Block is TRANSVERSE OF MATRIX BLOCK A 
+          for(int I_load = 0; I_load < M; ++I_load)
+          {
+            for (int K_load = 0; K_load < K; ++K_load)
+            {
+                A_Block[K_load + I_load*lda ] =  A[k_Block + I_load + K_load*lda];
+            } 
+          } // for(int I_load = 0; I_load < M; ++I_load)
 
-
+          /////////////////// START INNER LOOP !!!!!!!!
           /* Perform individual block dgemm */
 
                 // A addressed by row so A is incremented by lda plus offset. A is jumping across the cache. 
                 //do_block(lda, M, N, K, A + i + k*lda, B + k + j*lda, C + i + j*lda);
                 //cij += A[i+k*lda] * B[k+j*lda];
-                do_block(lda, M, N, K, buf + k + i*lda, B + k + j_mul, C + i + j_mul);
+                //do_block(lda, M, N, K, A_Block + k_Block + i_Block*lda, B_Block + k_Block + j_mul, C + i_Block + j_mul);
 
+                // let's try to vectorize by 4 at first!!!!
+                for(int j = 0; j<N; j+=4)
+                {
 
-              } // end for (int k = 0; k < lda; k += BLOCK_SIZE)
+                  //int B_index_mul = j*lda;
+                  //int C_index_mul = (j+j_Block) *lda;
 
-        } // end for (int j = 0; j < lda; j += BLOCK_SIZE)
-              //C[i+j*lda] = cij;
-    } //  for (int i = 0; i < lda; i += BLOCK_SIZE)
+                  for(int i=0; i<M; i+=2)
+                  {
+                      // load into local variables. 
+                      double C_Partial_0 = 0;
+                      double C_Partial_1 = 0;
+                      double C_Partial_2 = 0;
+                      double C_Partial_3 = 0;
+                      double C_Partial_4 = 0;
+                      double C_Partial_5 = 0;
+                      double C_Partial_6 = 0;
+                      double C_Partial_7 = 0;
+                      double Aelement = 0;
+                      double Aelement1 = 0;
 
-  free(buf);
+                      // perform the Partial sums C = C + A*B
+                      for(int k = 0; k < K; ++k)
+                      {   //// THIS CAN BE REPLACED WITH FMA instructions!!!!
+                        /// cij += A[k+i*lda] * B[k+C_index_mul]; 
+
+                        Aelement = A_Block[k + i*lda];
+                        Aelement1 = A_Block[k + (i+ 1)*lda ];  
+                        C_Partial_0 += Aelement * B_Block[ k + j*lda];
+                        C_Partial_1 += Aelement1 * B_Block[ k + j*lda];
+                        C_Partial_2 += Aelement * B_Block[ k + (j +1) *lda ];
+                        C_Partial_3 += Aelement1 * B_Block[ k + (j +1) * lda ];
+                        C_Partial_4 += Aelement * B_Block[ k + (j + 2) * lda ];
+                        C_Partial_5 += Aelement1 * B_Block[ k + (j +2) * lda ];
+                        C_Partial_6 += Aelement * B_Block[ k + (j+ 3) * lda ];
+                        C_Partial_7 += Aelement1 * B_Block[ k + (j +3) * lda ];
+
+                      } 
+                      // Sum elements in block 
+                      // C is column major ordered. 
+                      C[i_Block + i + (j+j_Block)*lda ] +=  C_Partial_0;
+                      C[i_Block + i + 1 + (j+j_Block) *lda] += C_Partial_1;
+                      
+                      C[i_Block + i + (j+j_Block + 1) *lda] +=  C_Partial_2;
+                      C[i_Block + i +1 + (j+j_Block + 1) *lda] +=  C_Partial_3;
+
+                      C[i_Block + i + (j+j_Block + 2) *lda] +=  C_Partial_4;
+                      C[i_Block + i + 1 + (j+j_Block + 2) *lda] +=  C_Partial_5;
+
+                      C[i_Block + i + (j+j_Block + 3) *lda] +=  C_Partial_6 ;
+                      C[i_Block + i + 1 + (j+j_Block + 3) *lda] +=  C_Partial_7;
+
+                  }
+
+                }
+
+            }   //  for (int i = 0; i < lda; i += BLOCK_SIZE)
+        } // end for (int k = 0; k < lda; k += BLOCK_SIZE)
+    }  // end for (int j = 0; j < lda; j += BLOCK_SIZE)
+
+  //free(buf);
 }
 
 
