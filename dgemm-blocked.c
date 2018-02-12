@@ -317,73 +317,143 @@ void square_dgemm (int lda, const double* A, const double* B, double* C)
                 //do_block(lda, M, N, K, A_Block + k_Block + i_Block*lda, B_Block + k_Block + j_mul, C + i_Block + j_mul);
 
                 // let's try to vectorize by 4 at first!!!!
-                // for(int j = 0; j<N; j+=4)
-                // {
-                //   //int B_index_mul = j*lda;
-                //   //int C_index_mul = (j+j_Block) *lda;
+                for(int j = 0; j<N; j+=2)
+                {
+                  //int B_index_mul = j*lda;
+                  //int C_index_mul = (j+j_Block) *lda;
 
-                //   for(int i=0; i<M; i+=2)
-                //   {
-                //       // load into local variables. 
-                //       double C_Partial_0 = 0;
-                //       double C_Partial_1 = 0;
-                //       double C_Partial_2 = 0;
-                //       double C_Partial_3 = 0;
-                //       double C_Partial_4 = 0;
-                //       double C_Partial_5 = 0;
-                //       double C_Partial_6 = 0;
-                //       double C_Partial_7 = 0;
+                  for(int i=0; i<M; i+=2)
+                  {
+                      // load into local variables. 
+                      double C_Partial_0 = 0;
+                      double C_Partial_1 = 0;
+                      double C_Partial_2 = 0;
+                      double C_Partial_3 = 0;
+                      // double C_Partial_4 = 0;
+                      // double C_Partial_5 = 0;
+                      // double C_Partial_6 = 0;
+                      // double C_Partial_7 = 0;
 
-                //       double Aelement = 0;
-                //       double Aelement1 = 0;
+                      double Aelement = 0;
+                      double Aelement1 = 0;
+                      double Aelement2 = 0;
+                      double Aelement3 = 0;
 
-                //       // perform the Partial sums C = C + A*B
-                //       for(int k = 0; k < K; ++k)
-                //       {   //// THIS CAN BE REPLACED WITH FMA instructions!!!!
-                //         /// cij += A[k+i*lda] * B[k+C_index_mul]; 
+                      // perform the Partial sums C = C + A*B
+                      for(int k = 0; k < K; ++k)
+                      {   //// THIS CAN BE REPLACED WITH FMA instructions!!!!
+                        /// cij += A[k+i*lda] * B[k+C_index_mul]; 
 
-                //         Aelement = A_Block[k + i*BLOCK_SIZE];
-                //         Aelement1 = A_Block[k + (i+ 1)*BLOCK_SIZE ];  
+                        Aelement = A_Block[k + i*BLOCK_SIZE];
+                        Aelement1 = A_Block[k + 1 + i*BLOCK_SIZE];  
+                        Aelement2 = A_Block[k + (i+1)*BLOCK_SIZE];
+                        Aelement3 = A_Block[k+1 + (i+1)*BLOCK_SIZE];  
 
-                //         C_Partial_0 += Aelement * B_Block[ k + j*BLOCK_SIZE];
-                //         C_Partial_1 += Aelement1 * B_Block[ k + j*BLOCK_SIZE];
+                        // Row 0 Col 0,1  
+                        C_Partial_0 = Aelement * B_Block[ k + j*BLOCK_SIZE] + Aelement1 * B_Block[ k +1 + j*BLOCK_SIZE];
+                        C_Partial_1 = Aelement * B_Block[ k + (j+1)*BLOCK_SIZE] + Aelement1 * B_Block[ k +1 + (j+1)*BLOCK_SIZE];
 
-                //         C_Partial_2 += Aelement * B_Block[ k + (j +1) *BLOCK_SIZE ];
-                //         C_Partial_3 += Aelement1 * B_Block[ k + (j +1) * BLOCK_SIZE ];
+                        //Row 1 Col 0,1 
+                        C_Partial_2 = Aelement2 * B_Block[ k + j*BLOCK_SIZE] + Aelement3 * B_Block[ k + 1 + j*BLOCK_SIZE];
+                        C_Partial_3 = Aelement2 * B_Block[ k + (j+1)*BLOCK_SIZE] + Aelement3 * B_Block[ k + 1 + (j+1)*BLOCK_SIZE];
 
-                //         C_Partial_4 += Aelement * B_Block[ k + (j + 2) * BLOCK_SIZE ];
-                //         C_Partial_5 += Aelement1 * B_Block[ k + (j +2) * BLOCK_SIZE ];
 
-                //         C_Partial_6 += Aelement * B_Block[ k + (j+ 3) * BLOCK_SIZE ];
-                //         C_Partial_7 += Aelement1 * B_Block[ k + (j +3) * BLOCK_SIZE ];
+                        // C_Partial_2 += Aelement * B_Block[ k + j +1 *BLOCK_SIZE ];
+                        // C_Partial_3 += Aelement1 * B_Block[ k + j +1 * BLOCK_SIZE ];
 
-                //       } 
-                //       // Sum elements in block 
-                //       // C is column major ordered. 
-                //       C[i_Block + i + (j+j_Block)*lda ] +=  C_Partial_0;
-                //       C[i_Block + i + 1 + (j+j_Block) *lda] += C_Partial_1;
+                        // C_Partial_4 += Aelement * B_Block[ k + j + 2 * BLOCK_SIZE ];
+                        // C_Partial_5 += Aelement1 * B_Block[ k + j +2 * BLOCK_SIZE ];
+
+                        // C_Partial_6 += Aelement * B_Block[ k + j+ 3 * BLOCK_SIZE ];
+                        // C_Partial_7 += Aelement1 * B_Block[ k + j +3 * BLOCK_SIZE ];
+
+                        printf("A0: %f\n", Aelement);
+                        printf("A1: %f\n", Aelement1);
+                        printf("B: %f\n", B_Block[k+j*BLOCK_SIZE]);
+                        printf("I: %d J: %d K: %d\n", i,j,k);
+                        printf(" I: %d J: %d PV: %f\n", i,j, C_Partial_0);
+                        printf(" I: %d J: %d PV: %f\n", i,j, C_Partial_1);
+                        printf(" I: %d J: %d PV: %f\n", i,j, C_Partial_2);
+                        printf(" I: %d J: %d PV: %f\n", i,j, C_Partial_3);
+                        // printf(" I: %d J: %d PV: %f\n", i,j, C_Partial_4);
+                        // printf(" I: %d J: %d PV: %f\n", i,j, C_Partial_5);
+                        // printf(" I: %d J: %d PV: %f\n", i,j, C_Partial_6);
+                        // printf(" I: %d J: %d PV: %f\n", i,j, C_Partial_7);
+
+                      } 
+                      // Sum elements in block 
+                      // C is column major ordered. 
+                      // C[i_Block + i + (j+j_Block)*lda ] +=  C_Partial_0;
+                      // C[i_Block + i + 1 + (j+j_Block) *lda] += C_Partial_1;
                       
-                //       C[i_Block + i + (j+j_Block + 1) *lda] +=  C_Partial_2;
-                //       C[i_Block + i +1 + (j+j_Block + 1) *lda] +=  C_Partial_3;
+                      // C[i_Block + i + (j+j_Block + 1) *lda] +=  C_Partial_2;
+                      // C[i_Block + i +1 + (j+j_Block + 1) *lda] +=  C_Partial_3;
 
-                //       C[i_Block + i + (j+j_Block + 2) *lda] +=  C_Partial_4;
-                //       C[i_Block + i + 1 + (j+j_Block + 2) *lda] +=  C_Partial_5;
+                      // C[i_Block + i + (j+j_Block + 2) *lda] +=  C_Partial_4;
+                      // C[i_Block + i + 1 + (j+j_Block + 2) *lda] +=  C_Partial_5;
 
-                //       C[i_Block + i + (j+j_Block + 3) *lda] +=  C_Partial_6 ;
-                //       C[i_Block + i + 1 + (j+j_Block + 3) *lda] +=  C_Partial_7;
+                      // C[i_Block + i + (j+j_Block + 3) *lda] +=  C_Partial_6 ;
+                      // C[i_Block + i + 1 + (j+j_Block + 3) *lda] +=  C_Partial_7;
 
-                //   }
+                  }
 
-                // } /// end of the inner loop 
+                } /// end of the inner loop 
 
              //free(A_Block);
 
 
-            C_Partial_1_1 = A_Block[k + i*BLOCK_SIZE] * B_Block[k + j*BLOCK_SIZE];
-            C_Partial_1_2 = A_Block[k + i*BLOCK_SIZE] * B_Block[k + (j+1)*BLOCK_SIZE];
+            //double C_Partial_1_1 = A_Block[k + i*BLOCK_SIZE] * B_Block[k + j*BLOCK_SIZE];
+            //double C_Partial_1_2 = A_Block[k + i*BLOCK_SIZE] * B_Block[k+1 + j*BLOCK_SIZE];
 
-            C_Partial_2_1 = A_Block[k+1 + i*BLOCK_SIZE] * B_Block[k + j+*BLOCK_SIZE];
-            C_Partial_2_2 = A_Block[k+1 + i*BLOCK_SIZE] * B_Block[k + (j+1)*BLOCK_SIZE];
+            //double C_Partial_2_1 = A_Block[k+1 + i*BLOCK_SIZE] * B_Block[k + j+*BLOCK_SIZE];
+            //double C_Partial_2_2 = A_Block[k+1 + i*BLOCK_SIZE] * B_Block[k+1 + j*BLOCK_SIZE];
+
+                          // for (int j = 0; j < N; ++j) 
+                          // {
+                          // //__m128d a,b,c,d;
+                          // int C_index_mul = j*lda;
+                          
+                          // /* For each column j of B */ 
+
+                          //     for (int i = 0; i < M; ++i) 
+                          //     {
+                          //     /* Compute C(i,j) */
+                          //     //c = _mm_loadu_pd(C + i + j*lda);
+
+                          //       //cij = C[i + C_index_mul];
+                          //       double cij = 0;
+                          //       for (int k = 0; k < 2; ++k)
+                          //       {
+                          //          //FMA instruction
+                          //         //https://software.intel.com/en-us/cpp-compiler-18.0-developer-guide-and-reference-mm-fmadd-pd-mm256-fmadd-pd
+                          //          // a = _mm_loadu_pd(A+k+i*lda);
+                          //          // b = _mm_loadu_pd(B+k+j*lda);
+                          //          // d = _mm_fmadd_pd(a, b, c);
+                              
+                          //         // once again A is jumping across the cache. 
+                          //        // transposed
+                          //         printf(" I: %d J: %d K: %d\n", i,j,k);
+
+                          //         cij += A_Block[k+i*BLOCK_SIZE] * B_Block[k+j*BLOCK_SIZE];
+
+                          //         printf("A: %f\n", A_Block[k+i*BLOCK_SIZE]);
+                          //         printf("B: %f\n", B_Block[k+i*BLOCK_SIZE]);
+                          //         printf("C: %f\n", cij);
+                          //         //cij = A[row e1]* B[col e1] + A[row e2]c* B[col e2]
+
+                                  
+
+                          //         // non transposed
+                          //         //cij += A[i+k*lda] * B[k+j*lda];
+                          //       }
+                          //       printf(" I: %d J: %d V: %f\n", i,j, cij);
+                              
+                          //     //C[i+j*lda] = (double)d[0];
+
+                          //      C[i + C_index_mul] = cij;
+
+                          //     }
+                          //   }
 
 
 
