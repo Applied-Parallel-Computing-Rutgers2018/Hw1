@@ -16,7 +16,8 @@ LDLIBS = -lrt -Wl,--start-group $(MKLROOT)/lib/intel64/libmkl_intel_lp64.a $(MKL
 const char* dgemm_desc = "Simple blocked dgemm.";
 
 #if !defined(BLOCK_SIZE)
-#define BLOCK_SIZE 41
+#define BLOCK_L2 1000
+#define BLOCK_SIZE 71
 #endif
 
 void transpose(const double *A, double * B, const int lda);
@@ -32,40 +33,42 @@ static void do_block (int lda, int block, int M, int N, int K, double* A, double
 {
   /* For each row i of A */
 
-  for (int j = 0; j < N; ++j) 
+for (int j = 0; j < N; ++j) 
   {
+    int col_Jblock = j*block;
 
-      for (int i = 0; i < M; i+=4)
+  for (int i = 0; i < M; ++i) // reversed order of loop 
+  {
+    /* For each column j of B */ 
+
+      /* Compute C(i,j) */
+      // unneeded memory access. 
+      int Row_IBlock = i*block;
+      register double cij0 = 0; 
+      register double cij1 = 0; 
+      register double cij2 = 0; 
+      register double cij3 = 0; 
+
+      for (int k = 0; k < K; ++k)
       {
-        /* For each column j of B */ 
-          /* Compute C(i,j) */
-          // unneeded memory access. 
-          register double cij = 0;
-          // register double cij0 = 0; 
-          // register double cij1 = 0; 
-          // register double cij2 = 0; 
-          // register double cij3 = 0; 
+	       //cij += A[i+k*lda] * B[k+j*lda];
+        cij0 += A[k+Row_IBlock] * B[k+col_Jblock];
+        // cij1 += A[k+1+i*block] * B[k+1+j*block];
+        // cij2 += A[k+2+i*block] * B[k+2+j*block];
+        // cij3 += A[k+3+i*block] * B[k+3+j*block];
 
-            for (int k = 0; k < K; ++k)
-            {
-      	       cij += A[i+k*lda] * B[k+j*lda];
-              // cij0 += A[k+i*block] * B[k+j*block];
-              // cij1 += A[k+((1+i)*block)] * B[k+j*block];
-              // cij2 += A[k+((2+i)*block)] * B[k+j*block];
-              // cij3 += A[k+((3+i)*block)] * B[k+j*block];
+      }
 
-            }
+      C[i+j*lda] += cij0;
+      // C[i+j*lda] += cij0;
+      // C[i+j*lda] += cij0;
+      // C[i+j*lda] += cij0;
 
-          C[i+j*lda] += cij;
-          // C[i+1+j*lda] += cij1;
-          // C[i+2+j*lda] += cij2;
-          // C[i+3+j*lda] += cij3;
-
-
-        }
 
     }
+
   }
+}
 
 
 // inline void transpose(const double *A, double * B, const int lda)
@@ -143,38 +146,86 @@ inline void Transposed_Blocked_Copy(const int lda, const int block, const int M,
 void square_dgemm (int lda, double* A, double* B, double* C)
 {
 
-  double B_Block[BLOCK_SIZE * BLOCK_SIZE + 2 * BLOCK_SIZE];
-  double A_Block[BLOCK_SIZE * BLOCK_SIZE + 2 * BLOCK_SIZE];
-  //double* buf = (double*)calloc(4*lda*lda, sizeof(double));
-  int M = 0;
-  int K = 0;
-  int N = 0;
 
-  //transpose(A, buf, lda);
-  /* For each block-row of A */ 
-  for (int j = 0; j < lda; j += BLOCK_SIZE)
-  {
-    //int j_mul = j*lda;
-    N = min (BLOCK_SIZE, lda-j);
-    /* Accumulate block dgemms into block of C */
-        for (int k = 0; k < lda; k += BLOCK_SIZE)
+    double B_BlockL2[BLOCK_L2 * BLOCK_L2 + 2 * BLOCK_L2];
+    double A_BlockL2[BLOCK_L2 * BLOCK_L2 + 2 * BLOCK_L2];
+
+    double B_Block[BLOCK_SIZE * BLOCK_SIZE + 2 * BLOCK_SIZE];
+    double A_Block[BLOCK_SIZE * BLOCK_SIZE + 2 * BLOCK_SIZE];
+
+    //double* buf = (double*)calloc(4*lda*lda, sizeof(double));
+
+    // L2 blocking;
+    int end_k = 0;
+    int end_j  = 0;
+    int end_i = 0;
+
+    // L1 blocking 
+    int M = 0;
+    int K = 0;
+    int N = 0;
+
+        /* For each L2-sized block-column of B */
+
+    ///////////////////  start of L2 blocking 
+        for (int s = 0; s < lda; s += BLOCK_L2)
         {
-          K = min (BLOCK_SIZE, lda-k);
+            end_j = s + min(BLOCK_L2, lda - s);
 
-          /* For each block-column of B */
-          direct_Blocked_Copy(lda, BLOCK_SIZE,N,K, k, j,B_Block,B);
+            for (int t = 0; t < lda; t += BLOCK_L2)
+            {
+                end_k = t + min(BLOCK_L2, lda - t);
 
-              for (int i = 0; i < lda; i += BLOCK_SIZE)
+                //direct_Blocked_Copy(lda, BLOCK_L2 ,end_k,end_j, t, s , B_BlockL2, B);
+
+                /* For each L2-sized block-row of A */
+              for (int r = 0; r < lda; r += BLOCK_L2)
               {
-                /* Correct block dimensions if block "goes off edge of" the matrix */
-                M = min (BLOCK_SIZE, lda-i);
-                Transposed_Blocked_Copy(lda, BLOCK_SIZE,M,K,k,i,A_Block,A);
-            
-            	
-            	/* Perform individual block dgemm */
-                do_block(lda, BLOCK_SIZE, M, N, K, A_Block, B_Block, C + i + j*lda);
+                  end_i = r + min(BLOCK_L2, lda - r);
+                  //Transposed_Blocked_Copy(lda, BLOCK_L2,end_i,end_k,t,r,A_BlockL2,A);
+
+                ///////////////////  start of L1 blocking 
+
+                  /* For each block-row of A */ 
+                  for (int j = 0; j < end_j; j += BLOCK_SIZE)
+                  {
+                    //int j_mul = j*lda;
+                   // N = min (BLOCK_SIZE, lda-j);
+                    N = min (BLOCK_SIZE, end_j-j);
+
+                    /* Accumulate block dgemms into block of C */
+                        for (int k = 0; k < end_k; k += BLOCK_SIZE)
+                        {
+                          //K = min (BLOCK_SIZE, lda-k);
+                          K = min (BLOCK_SIZE, end_k-k);
+
+                          /* For each block-column of B */
+                          direct_Blocked_Copy(lda, BLOCK_SIZE,N,K, k, j,B_Block,B);
+                          //direct_Blocked_Copy(BLOCK_L2, BLOCK_SIZE,N,K, k, j,B_Block,B_BlockL2);
+
+                              for (int i = 0; i < end_i; i += BLOCK_SIZE)
+                              {
+                                /* Correct block dimensions if block "goes off edge of" the matrix */
+                                //M = min (BLOCK_SIZE, lda-i);
+                                M = min (BLOCK_SIZE, end_i-i);
+                                Transposed_Blocked_Copy(lda, BLOCK_SIZE,M,K,k,i,A_Block,A);
+                                //direct_Blocked_Copy(BLOCK_L2, BLOCK_SIZE,M,K, k, i,A_Block,A_BlockL2);
+                                //direct_Blocked_Copy(BLOCK_L2, BLOCK_SIZE,K,M, i,k,A_Block,A_BlockL2);
+                            	
+                            	/* Perform individual block dgemm */
+                                do_block(lda, BLOCK_SIZE, M, N, K, A_Block, B_Block, C + i + j*lda);
+                              }
+                        }
+                  }
+
+
+                  ///////////////////  end of L1 blocking 
+
               }
+
+          }
         }
-  }
+        ///////////////////  end of L2 blocking 
+
 
 }

@@ -3,8 +3,8 @@
 CC = gcc 
 #OPT = -g
 OPT = -O3 -g
-#OPT = -g -fopenmp
-CFLAGS = -Wall -std=gnu99 -mfma -mavx2 -funroll-loops -ftree-vectorize -fstrict-aliasing -ffast-math $(OPT)
+#OPT = -g  
+CFLAGS = -Wall -std=gnu99 -ftree-vectorize -funroll-loops -mfma -mavx2 -fstrict-aliasing -ffast-math $(OPT)
 #CFLAGS = -Wall -std=gnu99 -funroll-loops -fstrict-aliasing -ffast-math $(OPT)
 MKLROOT = /opt/intel/mkl
 LDLIBS = -lrt -Wl,--start-group $(MKLROOT)/lib/intel64/libmkl_intel_lp64.a $(MKLROOT)/lib/intel64/libmkl_sequential.a $(MKLROOT)/lib/intel64/libmkl_core.a -Wl,--end-group -lpthread -lm
