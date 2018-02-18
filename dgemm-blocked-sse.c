@@ -2,7 +2,7 @@
 #include <emmintrin.h> 
 #include <string.h>
 
-const char *dgemm_desc = "Simple blocked dgemm.";
+const char *dgemm_desc = "SSE blocked dgemm.";
 
 #define BLOCK_L1 1024
 #define BLOCK_L2 2048
@@ -69,6 +69,7 @@ static inline void calc_4x4(int lda, int K, double *a, double *b, double *c)
     _mm_storeu_pd((c03_13_ptr + 2), c23_33);
 }
 
+//copy optimization
 static inline void copy_a(int lda, const int K, double *a_src, double *a_dest)
 {
     /* For each 4xK block-row of A */
