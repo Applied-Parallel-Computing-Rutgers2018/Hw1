@@ -5,7 +5,7 @@
 #include <float.h>  // For: DBL_EPSILON
 #include <math.h>   // For: fabs
 
-#define n 4
+#define n 5
 #define nsqured n*n
 
 /* reference_dgemm wraps a call to the BLAS-3 routine DGEMM, via the standard FORTRAN interface - hence the reference semantics. */ 
@@ -16,6 +16,7 @@ extern void DGEMM (char*, char*, int*, int*, int*, double*, double*, int*, doubl
 extern const char* dgemm_desc;
 extern void square_dgemm (int, double*, double*, double*);
 extern void printMatrix(const int lda,const double* A );
+extern void printMatrixLinear(const int lda,const double* A );
 
 
 // void fill (double* p, int nElements, double FillVal)
@@ -61,8 +62,8 @@ int main (int argc, char **argv)
     double A [nsqured];
     double B [nsqured];
 
-    fillinc(A, n, 1.0);
-    fillinc(B, n, 1.0);
+    fill(A, n, 2.0);
+    fill(B, n, 2.0);
 
     printf("INPUT MATRIXES \n");
 
@@ -77,14 +78,14 @@ int main (int argc, char **argv)
 
     printMatrix(n,B);
 
-    printf("\n");
-    printf("\n");
-    printf("\n");
-    printf("\n");
+    // printf("\n");
+    // printf("\n");
+    // printf("\n");
+    // printf("\n");
 
-    printf("\n");
-    printf("Before square_dgemm\n");
-    printf("\n");
+    // printf("\n");
+    // printf("Before square_dgemm\n");
+    // printf("\n");
 
   	square_dgemm (n, A, B, C);
 
@@ -113,3 +114,4 @@ int main (int argc, char **argv)
 
   return 0;
 }
+
