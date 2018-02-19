@@ -37,18 +37,17 @@ const char *dgemm_desc = "SSE blocked dgemm.";
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #define MATRIXELEM(A, i, j) (A)[(j)*lda + (i)]
 
-
 /* This auxiliary subroutine performs a smaller dgemm operation
  *  C := C + A * B
  * where C is M-by-N, A is M-by-K, and B is K-by-N. */
 static void do_block(int lda, int M, int N, int K, double *A, double *B, double *C)
 {
-    /* For each row i of A */
+
     for (int i = 0; i < M; ++i)
-        /* For each column j of B */
+
         for (int j = 0; j < N; ++j)
         {
-            /* Compute C(i,j) */
+
             double cij = C[i + j * lda];
             for (int k = 0; k < K; ++k)
             {
@@ -61,14 +60,11 @@ static void do_block(int lda, int M, int N, int K, double *A, double *B, double 
 
 static void do_block_opt(int lda, int M, int N, int K, double *A, double *B, double *C)
 {
-    /* For each row i of A */
+
     int i = 0, j = 0, k = 0;
     static double aik;
     static double temp;
 
-    //printf("curr lad (%d) M (%d) N (%d) K (%d)", lda, M, N, K);
-
-    /* For each column j of B */
     //change the for loop to let the element accessed by row order
     for (j = 0; j < N; ++j)
     {
@@ -77,7 +73,6 @@ static void do_block_opt(int lda, int M, int N, int K, double *A, double *B, dou
             temp = B[k + j * lda];
             for (i = 0; i < M; ++i)
             {
-                /* Compute C(i,j) */
                 //double cij = C[i + j * n];
                 //cij = c(i, j);
                 //printf("get cij %ld\n",cij);
@@ -89,11 +84,10 @@ static void do_block_opt(int lda, int M, int N, int K, double *A, double *B, dou
     }
 }
 
-
 //copy optimization
 static inline void localise_a(int lda, const int K, double *a_src, double *a_dest)
 {
-    /* For each 4xK block-row of A */
+    // For each 4xK block-row of A
     for (int i = 0; i < K; ++i)
     {
         *a_dest++ = *a_src; //column major, each itero read 4 elements from 4 consecutive row
@@ -154,15 +148,14 @@ void do_block2(int lda, int M, int N, int K, double *A, double *B, double *C)
         }
     }
 
-    /* Handle "fringes" */
     if (fringe1 != 0)
     {
-        /* For each row of A */
+
         for (; i < M; ++i)
-            /* For each column of B */
+            // For each column of B
             for (p = 0; p < N; ++p)
             {
-                /* Compute C[i,j] */
+                // Compute C[i,j]
                 double c_ip = MATRIXELEM(C, i, p);
                 for (int k = 0; k < K; ++k)
                 {
@@ -175,12 +168,11 @@ void do_block2(int lda, int M, int N, int K, double *A, double *B, double *C)
     if (fringe2 != 0)
     {
         Mmax = M - fringe1;
-        /* For each column of B */
+
         for (; j < N; ++j)
-            /* For each row of A */
+
             for (i = 0; i < Mmax; ++i)
             {
-                /* Compute C[i,j] */
                 double cij = MATRIXELEM(C, i, j);
                 for (int k = 0; k < K; ++k)
                 {
@@ -248,14 +240,14 @@ void block_sse_4x4(int lda, int K, double *a, double *b, double *c)
 
 static void do_block_opt2(int lda, int M, int N, int K, double *A, double *B, double *C)
 {
-    /* For each row i of A */
+    //For each row i of A
     int i = 0, j = 0, k = 0;
     static double aik;
     static double temp;
 
     //printf("curr lad (%d) M (%d) N (%d) K (%d)", lda, M, N, K);
 
-    /* For each column j of B */
+    // For each column j of B
     //change the for loop to let the element accessed by row order
     for (j = 0; j < N; ++j)
     {
