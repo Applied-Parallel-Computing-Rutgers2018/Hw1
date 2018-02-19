@@ -24,15 +24,17 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 #endif
 
 #define min(a,b) (((a)<(b))?(a):(b))
-void copy_a(int lda, const int K, double *a_src, double *a_dest);
+void Direct_Copy_4(const int lda, const int K, double * restrict In, double * restrict Out );
 void copy_b(int lda, const int K, double *b_src, double *b_dest);
+void transpose(const double *A, double * B, const int lda);
 
 void avx_basic(int lda, int K, double * restrict a, double * restrict b, double * restrict c);
-inline void Transposed_Packed_Blocked_Copy(const int lda, const int block, const int M, const int K, const int K_Offset, const int i_Offset, double * restrict A_Block, const double * restrict A);
-
+void Transposed_Packed_Blocked_Copy(const int lda, const int block, const int M, const int K, const int K_Offset, const int i_Offset, double * restrict A_Block, const double * restrict A);
+void Direct_Packed_Blocked_Copy(const int lda, const int block, const int N, const int K, const int K_Offset, const int J_Offset, double * restrict B_Block, const double * restrict B);
 void square_dgemm (int lda, double* A, double* B, double* C);
+void do_block(const int lda, const int M, const int N, const int K, double * restrict A, double *restrict B, double  *restrict C);
 
-#define Test 
+//#define Test 
 
 #ifdef Test
 
@@ -63,22 +65,32 @@ void printMatrixLinear(const int lda,const double* A );
 /* This auxiliary subroutine performs a smaller dgemm operation
  *  C := C + A * B
  * where C is M-by-N, A is M-by-K, and B is K-by-N. */
-static inline void do_block(const int lda, const int M, const int N, const int K, double * restrict A, double *restrict B, double  *restrict C)
+inline void do_block(const int lda, const int M, const int N, const int K, double * restrict A, double *restrict B, double  *restrict C)
 {
 
-  // printf("\n");
-  // printf("Inside do block -----------------------------------------------------------------------------------\n");
-  // printf("lda: %d M: %d N: %d K: %d\n" , lda, M, N, K );
-  // printf("\n");
-  // printf("\n");
-  // printf("Matrix A\n");-
-  // printMatrix(M,A );
-  // printf("Matrix B\n");
-  // printMatrix(N,B);
-  // printf("\n");
-  // printf("\n");
-  // printf("\n");
-  double A_block[M * K], B_block[K * N];
+    #ifdef Test
+  printf("\n");
+  printf("Inside do block -----------------------------------------------------------------------------------\n");
+  printf("lda: %d M: %d N: %d K: %d\n" , lda, M, N, K );
+  printf("\n");
+  printf("\n");
+  printf("Matrix A\n");
+  printf("\n");
+  printMatrix(M,A );
+  printf("\n");
+  printf("Matrix B\n");
+  printf("\n");
+  printMatrix(N,B);
+  printf("\n");
+  printf("\n");
+  printf("Inside do block -----------------------------------------------------------------------------------\n");
+  printf("\n");
+
+  #endif
+
+
+  double A_block[M * K], B_block[K * N];  //K*N
+
   register double *a_ptr, *b_ptr, *c;
 
   int Mmax = M - 3;
@@ -90,18 +102,27 @@ static inline void do_block(const int lda, const int M, const int N, const int K
     int j = 0;
     int p = 0;
 
+    //double* B_Block= (double*)calloc(4*lda*lda, sizeof(double));
+
+    //transpose(B ,B_Block,lda);
+
     /* For each column of B */
     for (j = 0; j < Nmax; j += 4)
-    {
+    {   /// B is now in Row major order 
         b_ptr = &B_block[j * K]; //start address of each B column
-        // copy and transpose B_block
-        //copy_b(lda, K, B + j * lda, b_ptr);
-        copy_b(lda, K, B + j * lda, b_ptr);
+        Direct_Copy_4(lda, K, B + j , b_ptr);
+    #ifdef Test
+        printf("\n");
+        printf("After copy B\n");
+        printMatrix(K,b_ptr);
+        printf("\n");
+    #endif
         /* For each row of A */
         for (i = 0; i < Mmax; i += 4)
         {
             a_ptr = &A_block[i * K];
-            copy_a(lda, K, A + i, a_ptr);
+            Direct_Copy_4(lda, K, A + i, a_ptr);
+
             c = C + i + j * lda;
             avx_basic(lda, K, a_ptr, b_ptr, c);
         }
@@ -115,18 +136,19 @@ static inline void do_block(const int lda, const int M, const int N, const int K
             for (p = 0; p < N; ++p)
             {
                 /* Compute C[i,j] */
-                register double c_ip = 0; 
+                register double cip = 0; 
                 //for each element
                 for (int k = 0; k < K; ++k)
                 {
-                    c_ip +=  A[i+k*lda] * B[k+ p*lda];
+                    //cip +=  A[i+k*lda] * B[k+ p*lda];
+                    cip +=  A[i+k*lda] * B[p + k*lda];
                 }
-                C[i+ p*lda] += c_ip;
+                C[i+ p*lda] += cip;
             }
-          }
+        }
 
         Mmax = M - MedgeRemainder;
-        /* For each remaining column of B */
+         //For each remaining column of B 
         for (; j < N; ++j)  //N is i  or col
         {
             /* For eveey row of A  not just the fringes*/
@@ -137,7 +159,9 @@ static inline void do_block(const int lda, const int M, const int N, const int K
                 // for each element
                 for (int k = 0; k < K; ++k)
                 {
-                    cij += A[i + k*lda] * B[k + j*lda];
+                    //cij += A[i + k*lda] * B[k + j*lda];
+                    cij += A[i + k*lda] * B[j + k*lda];
+
                 }
                 C[i+j*lda] += cij;
             }
@@ -153,15 +177,33 @@ inline void square_dgemm (int lda, double* A, double* B, double* C)
 {
 
     double A_Block[BLOCK_SIZE * BLOCK_SIZE + 2 * BLOCK_SIZE];
-    double B_Block[BLOCK_SIZE * BLOCK_SIZE + 2 * BLOCK_SIZE];
+    //double B_Block[BLOCK_SIZE * BLOCK_SIZE + 2 * BLOCK_SIZE];
     double C_Block[BLOCK_SIZE * BLOCK_SIZE + 2 * BLOCK_SIZE];
 
+    double B_Block[lda * lda];
+    
+    //double* buf = (double*)calloc(4*lda*lda, sizeof(double));
     int M = 0;
     int K = 0;
     int N = 0;
       /* For each block-column of B */
 
-  //transpose(A, A_Block, lda);
+    //Transposed_Packed_Blocked_Copy(lda, const int block, const int M, const int K, const int K_Offset, const int i_Offset, double * restrict A_Block, const double * restrict A)
+
+    transpose(B, B_Block,lda);
+
+    // for(int ColCBlock = 0; ColCBlock < lda; ColCBlock += BLOCK_SIZE)
+    // {
+    //     int RowOffset = RowOffset + min (BLOCK_SIZE, lda-ColCBlock);
+
+    //     for(int RowCBlock = 0; RowCBlock < lda; +=BLOCK_SIZE)
+    //     {
+    //         int RowOffset = RowOffset + min (BLOCK_SIZE, lda-RowCBlock);
+
+    //     }
+    // }
+
+
     for (int j = 0; j < lda; j += BLOCK_SIZE)
     {
       /* Correct block dimensions if block "goes off edge of" the matrix */
@@ -173,7 +215,8 @@ inline void square_dgemm (int lda, double* A, double* B, double* C)
      /* Correct block dimensions if block "goes off edge of" the matrix */
         K = min (BLOCK_SIZE, lda-k);
         //direct_Blocked_Copy(lda, BLOCK_SIZE,N,K, k, j,B_Block,B);
-        Transposed_Packed_Blocked_Copy(lda, BLOCK_SIZE,N,K,k,j,B_Block,B);
+        //Transposed_Packed_Blocked_Copy(lda, BLOCK_SIZE,N,K,k,j,B_Block,B);
+        //Transposed_Packed_Blocked_Copy(lda, BLOCK_SIZE, N, K,k, j, B_Block,B);
 
           for (int i = 0; i < lda; i += BLOCK_SIZE)
           {
@@ -185,9 +228,14 @@ inline void square_dgemm (int lda, double* A, double* B, double* C)
 
               //----------------------------------------------------------------------------------
         	     /* Perform individual block dgemm */
-        	     do_block(lda, M, N, K, A + i + k*lda, B + k + j*lda, C + i + j*lda);
+        	     //do_block(lda, M, N, K, A + i + k*lda, B + k + j*lda, C + i + j*lda);
             //-------------------------------------------------------------------------------
-                 //do_block(lda, M, N, K, A_Block + k + i*lda, B + k + j*lda, C + i + j*lda);
+                // B transspose
+                 do_block(lda, M, N, K, A + i + k*lda, B_Block + j + k*lda, C + i + j*lda);
+
+              // new stuff
+
+                 //do_block(lda, M, N, K, A + i + k*lda, B_Block, C + i + j*lda);
 
             }
 
@@ -200,7 +248,7 @@ inline void square_dgemm (int lda, double* A, double* B, double* C)
 }
 
 
-void avx_basic(int lda, int K, double * restrict a, double * restrict b, double * restrict c);
+inline void avx_basic(int lda, int K, double * restrict a, double * restrict b, double * restrict c)
 {
     // adapted from code taken from the power point sent out to the class 
     // Min AVX required 
@@ -275,38 +323,44 @@ void avx_basic(int lda, int K, double * restrict a, double * restrict b, double 
 }
 
 
-inline void copy_a(int lda, const int K, double *a_src, double *a_dest)
+inline void Direct_Copy_4(const int lda, const int K, double * restrict In, double * restrict Out )
 {
+    // this will only copy 4!
     /* For each 4xK block-row of A */
+    // turn this into an AVX?
     for (int i = 0; i < K; ++i)
     {
-        *a_dest++ = *a_src; //column major, each itero read 4 elements from 4 consecutive row
-        *a_dest++ = *(a_src + 1);
-        *a_dest++ = *(a_src + 2);
-        *a_dest++ = *(a_src + 3);
-        a_src += lda;
+        // this causes the most cache misses
+        *Out++ = *In; //column major, each itero read 4 elements from 4 consecutive row  
+        *Out++ = *(In+ 1);
+        *Out++ = *(In + 2);
+        *Out++ = *(In + 3);
+        // move pointer by lda. 
+        In += lda;
     }
 }
 
-inline void copy_b(int lda, const int K, double *b_src, double *b_dest)
-{
-    double *b_ptr0, *b_ptr1, *b_ptr2, *b_ptr3;
-    b_ptr0 = b_src;
-    b_ptr1 = b_ptr0 + lda;
-    b_ptr2 = b_ptr1 + lda;
-    b_ptr3 = b_ptr2 + lda;
+// inline void copy_b(int lda, const int K, double *b_src, double *b_dest)
+// {
+//     // this will only copy 4!
+//     /* For each 4xK block-row of A */
+//     double *b_ptr0, *b_ptr1, *b_ptr2, *b_ptr3;
+//     b_ptr0 = b_src;
+//     b_ptr1 = b_ptr0 + lda;
+//     b_ptr2 = b_ptr1 + lda;
+//     b_ptr3 = b_ptr2 + lda;
 
-    for (int i = 0; i < K; ++i)
-    {
-        *b_dest++ = *b_ptr0++;
-        *b_dest++ = *b_ptr1++;
-        *b_dest++ = *b_ptr2++;
-        *b_dest++ = *b_ptr3++;
-    }
-}
+//     for (int i = 0; i < K; ++i)
+//     {
+//         *b_dest++ = *b_ptr0++;
+//         *b_dest++ = *b_ptr1++;
+//         *b_dest++ = *b_ptr2++;
+//         *b_dest++ = *b_ptr3++;
+//     }
+// }
 
 
-inline void direct_Blocked_Copy(const int lda, const int block, const int N, const int K, const int K_Offset, const int J_Offset, double * B_Block, const double * B)
+inline void Direct_Packed_Blocked_Copy(const int lda, const int block, const int N, const int K, const int K_Offset, const int J_Offset, double * restrict B_Block, const double * restrict B)
 {
 
     register int ColOrginal = 0;
@@ -316,8 +370,8 @@ inline void direct_Blocked_Copy(const int lda, const int block, const int N, con
     for (int J_load = 0; J_load < N; ++J_load)
     {
       ColOrginal = (J_load + J_Offset) *lda; /// the col from the orginal matrix
-      ColMapped = J_load * block; // the newly mapped index in the blocked matrix
-
+      //ColMapped = J_load * block; // the newly mapped index in the blocked matrix
+      ColMapped = J_load * N;
       for (int K_load = 0; K_load < K; K_load+=4)
       {
         //j_load = 0
@@ -336,42 +390,69 @@ inline void direct_Blocked_Copy(const int lda, const int block, const int N, con
 
 inline void Transposed_Packed_Blocked_Copy(const int lda, const int block, const int M, const int K, const int K_Offset, const int i_Offset, double * restrict A_Block, const double * restrict A)
 {
-     double * Aptr = A + i_Offset;
+     //double * Aptr = A + i_Offset;
 
     for(int I_load = 0; I_load < M; ++I_load)
     {
       //int ColOrginal = ((K_load + K_Offset) *lda); /// the col from the orginal matrix
       //int RowMapped = (I_load * block); // the newly mapped index in the blocked matrix
-      for (int K_load = 0; K_load < K; K_load+=4)
+      //for (int K_load = 0; K_load < K; K_load+=4)
+        for (int K_load = 0; K_load < K; ++K_load)
       {
-          // A_Block[K_load + (I_load * block)] =  A[i_Offset + I_load + ((K_load + K_Offset) *lda)];
-          // A_Block[K_load + (I_load * block) + 1] =  A[i_Offset + I_load + ((K_load +1  + K_Offset) *lda)];
-          // A_Block[K_load + (I_load * block) + 2] =  A[i_Offset + I_load + ((K_load + 2 + K_Offset) *lda)];
-          // A_Block[K_load + (I_load * block) + 3] =  A[i_Offset + I_load + ((K_load + 3 + K_Offset) *lda)];
-          A_Block[K_load + (I_load * block)]     =  Aptr[I_load + ((K_load + K_Offset) *lda)];
-          A_Block[K_load + (I_load * block) + 1] =  Aptr[I_load + ((K_load +1  + K_Offset) *lda)];
-          A_Block[K_load + (I_load * block) + 2] =  Aptr[I_load + ((K_load + 2 + K_Offset) *lda)];
-          A_Block[K_load + (I_load * block) + 3] =  Aptr[I_load + ((K_load + 3 + K_Offset) *lda)];
+          A_Block[K_load + (I_load * M)] =  A[i_Offset + I_load + ((K_load + K_Offset) *lda)];
+          // A_Block[K_load + (I_load * M) + 1] =  A[i_Offset + I_load + ((K_load +1  + K_Offset) *lda)];
+          // A_Block[K_load + (I_load * M) + 2] =  A[i_Offset + I_load + ((K_load + 2 + K_Offset) *lda)];
+          // A_Block[K_load + (I_load * M) + 3] =  A[i_Offset + I_load + ((K_load + 3 + K_Offset) *lda)];
+         //  A_Block[K_load + (I_load * block)]     =  Aptr[I_load + ((K_load + K_Offset) *lda)];
+         //  A_Block[K_load + (I_load * block) + 1] =  Aptr[I_load + ((K_load +1  + K_Offset) *lda)];
+         //  A_Block[K_load + (I_load * block) + 2] =  Aptr[I_load + ((K_load + 2 + K_Offset) *lda)];
+         // A_Block[K_load + (I_load * block) + 3] =  Aptr[I_load + ((K_load + 3 + K_Offset) *lda)];
+
+         #ifdef Test
+          // stupid gdb seems to have some problems loading some of the source files 
+          printf("Transposed_Packed_Blocked_Copy\n ");
+          printf("lda: %d block: %d M: %d K: %d K_Offset: %d i_Offset: %d\n",lda,block,M,K, K_Offset,i_Offset);
+          printf("A_Block: %f , A: %f\n",A_Block[K_load + (I_load * M)],A[i_Offset + I_load + ((K_load + K_Offset) *lda)]);
+          #endif
+
       } 
 
+
+
     } // for(int I_load = 0; I_load < M; ++I_load)
+
+        #ifdef Test
+        printf("\n");
+        printf("END of Transposed_Packed_Blocked_Copy  -----------------------------------------------------------------------------------\n");
+        printf("lda: %d block: %d M: %d K: %d K_Offset: %d i_Offset: %d\n",lda,block,M,K, K_Offset,i_Offset);
+        printf("\n");
+        printf("\n");
+        printf("Matrix In\n");
+        printMatrixLinear(lda,A );
+        printf("\n");
+        printf("Matrix Out\n");
+        printMatrixLinear(block,A_Block);
+        printf("\n");
+        printf("\n");
+        printf("\n");
+        #endif
 }
 
 
-// inline void transpose(const double *A, double * B, const int lda)
-// {
-//     int i, j;
-//     for (j = 0; j < lda; j++)
-//     {
-//       int j_lda = j*lda;
-//       for (i = 0; i < lda; i++) 
-//       {
-//           //B[i][j] = A[j][i];
-//           B[i + j_lda] = A[j + i * lda];
+inline void transpose(const double *A, double * B, const int lda)
+{
+    int i, j;
+    for (j = 0; j < lda; j++)
+    {
+      int j_lda = j*lda;
+      for (i = 0; i < lda; i++) 
+      {
+          //B[i][j] = A[j][i];
+          B[i + j_lda] = A[j + i * lda];
 
-//       }
-//     }
-// }
+      }
+    }
+}
 
 
 #ifdef Test

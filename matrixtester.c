@@ -15,8 +15,11 @@ extern void DGEMM (char*, char*, int*, int*, int*, double*, double*, int*, doubl
 /* Your function must have the following signature: */
 extern const char* dgemm_desc;
 extern void square_dgemm (int, double*, double*, double*);
+extern void do_block(const int lda, const int M, const int N, const int K, double * restrict A, double *restrict B, double  *restrict C);
 extern void printMatrix(const int lda,const double* A );
 extern void printMatrixLinear(const int lda,const double* A );
+extern void copy_b(int lda, const int K, double *b_src, double *b_dest);
+extern void transpose(const double *A, double * B, const int lda);
 
 
 // void fill (double* p, int nElements, double FillVal)
@@ -57,13 +60,14 @@ int main (int argc, char **argv)
   /* Test sizes should highlight performance dips at multiples of certain powers-of-two */
 
     double* C = (double*)calloc(3*n*n, sizeof(double));
+    double* Temp = (double*)calloc(3*n*n, sizeof(double));
     //double C [nsqured];
     
     double A [nsqured];
     double B [nsqured];
 
     fill(A, n, 2.0);
-    fill(B, n, 2.0);
+    fillinc(B, n, 2.0);
 
     printf("INPUT MATRIXES \n");
 
@@ -78,16 +82,30 @@ int main (int argc, char **argv)
 
     printMatrix(n,B);
 
-    // printf("\n");
-    // printf("\n");
-    // printf("\n");
-    // printf("\n");
+    printf("\n");
+    printf("\n");
+    printf("\n");
+    printf("\n");
 
     // printf("\n");
     // printf("Before square_dgemm\n");
     // printf("\n");
 
   	square_dgemm (n, A, B, C);
+
+    //do_block(n, n, n, n, A, B,  C);
+
+    //copy_b(n, n, B, C);
+    //copy_a(n, n, B, C);
+
+    //transpose(B ,C,n);
+    //transpose(B ,Temp,n);
+    //do_block(n, n, n, n, A, Temp,  C);
+
+    // copy_b(n, n, Temp, C);
+    //copy_a(n, n, Temp, C);
+
+    //do_block(n, n, n, n, A, B,  C);
 
     printf("\n");
     printf("After square_dgemm\n");
