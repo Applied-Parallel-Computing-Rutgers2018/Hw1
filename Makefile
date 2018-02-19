@@ -2,8 +2,8 @@
 
 CC = gcc
 #CC= icc 
-OPT = -g
-#OPT = -O3 -g
+#OPT = -g
+OPT = -O3 -g
 #OPT = -g  
 CFLAGS = -Wall -std=gnu99 -mavx2 -mfma -ftree-vectorize -funroll-loops -fstrict-aliasing -ffast-math $(OPT)
 #CFLAGS = -Wall -std=gnu99 -march=core-avx2 -vec -ftree-vectorize -funroll-loops -fstrict-aliasing $(OPT)
