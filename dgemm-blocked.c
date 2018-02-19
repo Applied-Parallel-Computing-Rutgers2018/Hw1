@@ -26,7 +26,7 @@ LDLIBS = -lrt -Wl,--start-group $(MKLROOT)/lib/intel64/libmkl_intel_lp64.a $(MKL
 #include <emmintrin.h>
 #include <string.h>
 
-const char *dgemm_desc = "Simple blocked dgemm.";
+const char *dgemm_desc = "SSE blocked dgemm.";
 
 #if !defined(BLOCK_SIZE)
 //local memory of bridge
@@ -37,8 +37,61 @@ const char *dgemm_desc = "Simple blocked dgemm.";
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #define MATRIXELEM(A, i, j) (A)[(j)*lda + (i)]
 
+
+/* This auxiliary subroutine performs a smaller dgemm operation
+ *  C := C + A * B
+ * where C is M-by-N, A is M-by-K, and B is K-by-N. */
+static void do_block(int lda, int M, int N, int K, double *A, double *B, double *C)
+{
+    /* For each row i of A */
+    for (int i = 0; i < M; ++i)
+        /* For each column j of B */
+        for (int j = 0; j < N; ++j)
+        {
+            /* Compute C(i,j) */
+            double cij = C[i + j * lda];
+            for (int k = 0; k < K; ++k)
+            {
+                cij += A[i + k * lda] * B[k + j * lda];
+            }
+
+            C[i + j * lda] = cij;
+        }
+}
+
+static void do_block_opt(int lda, int M, int N, int K, double *A, double *B, double *C)
+{
+    /* For each row i of A */
+    int i = 0, j = 0, k = 0;
+    static double aik;
+    static double temp;
+
+    //printf("curr lad (%d) M (%d) N (%d) K (%d)", lda, M, N, K);
+
+    /* For each column j of B */
+    //change the for loop to let the element accessed by row order
+    for (j = 0; j < N; ++j)
+    {
+        for (k = 0; k < K; k++)
+        {
+            temp = B[k + j * lda];
+            for (i = 0; i < M; ++i)
+            {
+                /* Compute C(i,j) */
+                //double cij = C[i + j * n];
+                //cij = c(i, j);
+                //printf("get cij %ld\n",cij);
+                //C[i + j * n] += A[i + k * n] * B[k + j * n];
+                C[i + j * lda] += temp * A[i + k * lda];
+            }
+            //c(i, j) = cij;
+        }
+    }
+}
+
+
 //copy optimization
-static inline void copy_a(int lda, const int K, double *a_src, double *a_dest)
+static inline void localise_a(int lda, const int K, double *a_src, double *a_dest)
 {
     /* For each 4xK block-row of A */
     for (int i = 0; i < K; ++i)
@@ -51,7 +104,7 @@ static inline void copy_a(int lda, const int K, double *a_src, double *a_dest)
     }
 }
 
-static inline void copy_b(int lda, const int K, double *b_src, double *b_dest)
+static inline void localise_b(int lda, const int K, double *b_src, double *b_dest)
 {
     double *b_ptr0, *b_ptr1, *b_ptr2, *b_ptr3;
     b_ptr0 = b_src;
@@ -82,20 +135,22 @@ void do_block2(int lda, int M, int N, int K, double *A, double *B, double *C)
 
     int i = 0, j = 0, p = 0;
 
-    /* For each column of B */
+    // For each column of B
     for (j = 0; j < Nmax; j += 4)
     {
-        b_ptr = &B_block[j * K]; //start address of each B column
-        // copy and transpose B_block
-        copy_b(lda, K, B + j * lda, b_ptr);
-        /* For each row of A */
+        b_ptr = &B_block[j * K];
+        localise_b(lda, K, B + j * lda, b_ptr);
+
         for (i = 0; i < Mmax; i += 4)
         {
             a_ptr = &A_block[i * K];
             if (j == 0)
-                copy_a(lda, K, A + i, a_ptr);
+            {
+                localise_a(lda, K, A + i, a_ptr);
+            }
+
             c = C + i + j * lda;
-            block_4x4(lda, K, a_ptr, b_ptr, c);
+            block_sse_4x4(lda, K, a_ptr, b_ptr, c);
         }
     }
 
@@ -110,7 +165,10 @@ void do_block2(int lda, int M, int N, int K, double *A, double *B, double *C)
                 /* Compute C[i,j] */
                 double c_ip = MATRIXELEM(C, i, p);
                 for (int k = 0; k < K; ++k)
+                {
                     c_ip += MATRIXELEM(A, i, k) * MATRIXELEM(B, k, p);
+                }
+
                 MATRIXELEM(C, i, p) = c_ip;
             }
     }
@@ -125,13 +183,16 @@ void do_block2(int lda, int M, int N, int K, double *A, double *B, double *C)
                 /* Compute C[i,j] */
                 double cij = MATRIXELEM(C, i, j);
                 for (int k = 0; k < K; ++k)
+                {
                     cij += MATRIXELEM(A, i, k) * MATRIXELEM(B, k, j);
+                }
+
                 MATRIXELEM(C, i, j) = cij;
             }
     }
 }
 
-void block_4x4(int lda, int K, double *a, double *b, double *c)
+void block_sse_4x4(int lda, int K, double *a, double *b, double *c)
 {
     __m128d a0x_1x, a2x_3x,
         bx0, bx1, bx2, bx3,
@@ -183,57 +244,6 @@ void block_4x4(int lda, int K, double *a, double *b, double *c)
     _mm_storeu_pd((c02_12_ptr + 2), c22_32);
     _mm_storeu_pd(c03_13_ptr, c03_13);
     _mm_storeu_pd((c03_13_ptr + 2), c23_33);
-}
-
-/* This auxiliary subroutine performs a smaller dgemm operation
- *  C := C + A * B
- * where C is M-by-N, A is M-by-K, and B is K-by-N. */
-static void do_block(int lda, int M, int N, int K, double *A, double *B, double *C)
-{
-    /* For each row i of A */
-    for (int i = 0; i < M; ++i)
-        /* For each column j of B */
-        for (int j = 0; j < N; ++j)
-        {
-            /* Compute C(i,j) */
-            double cij = C[i + j * lda];
-            for (int k = 0; k < K; ++k)
-            {
-                cij += A[i + k * lda] * B[k + j * lda];
-            }
-
-            C[i + j * lda] = cij;
-        }
-}
-
-static void do_block_opt(int lda, int M, int N, int K, double *A, double *B, double *C)
-{
-    /* For each row i of A */
-    int i = 0, j = 0, k = 0;
-    static double aik;
-    static double temp;
-
-    //printf("curr lad (%d) M (%d) N (%d) K (%d)", lda, M, N, K);
-
-    /* For each column j of B */
-    //change the for loop to let the element accessed by row order
-    for (j = 0; j < N; ++j)
-    {
-        for (k = 0; k < K; k++)
-        {
-            temp = B[k + j * lda];
-            for (i = 0; i < M; ++i)
-            {
-                /* Compute C(i,j) */
-                //double cij = C[i + j * n];
-                //cij = c(i, j);
-                //printf("get cij %ld\n",cij);
-                //C[i + j * n] += A[i + k * n] * B[k + j * n];
-                C[i + j * lda] += temp * A[i + k * lda];
-            }
-            //c(i, j) = cij;
-        }
-    }
 }
 
 static void do_block_opt2(int lda, int M, int N, int K, double *A, double *B, double *C)
