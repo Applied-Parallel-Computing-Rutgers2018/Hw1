@@ -5,7 +5,7 @@
 #include <float.h>  // For: DBL_EPSILON
 #include <math.h>   // For: fabs
 
-#define n 5
+#define n 7
 #define nsqured n*n
 
 /* reference_dgemm wraps a call to the BLAS-3 routine DGEMM, via the standard FORTRAN interface - hence the reference semantics. */ 
@@ -21,7 +21,7 @@ extern void printMatrixLinear(const int lda,const double* A );
 extern void copy_b(int lda, const int K, double *b_src, double *b_dest);
 extern void transpose(const double *A, double * B, const int lda);
 extern void Direct_Packed_Blocked_Copy(const int lda, const int block, const int N, const int K, const int K_Offset, const int J_Offset, double * restrict B_Block, double * restrict B);
-
+extern void Direct_Blocked_Copy(const int lda, const int N, const int K, const int K_Offset, const int J_Offset, double * restrict Out, double * restrict In);
 
 // void fill (double* p, int nElements, double FillVal)
 // {
@@ -63,12 +63,18 @@ int main (int argc, char **argv)
     double* C = (double*)calloc(3*n*n, sizeof(double));
     //double* Temp = (double*)calloc(3*n*n, sizeof(double));
     //double C [nsqured];
+
+    //double A_Block[(n-4) * (n-4) ];
     
     double A [nsqured];
+    double Flag[nsqured];
     double B [nsqured];
 
     fill(A, n, 2.0);
-    fillinc(B, n, 2.0);
+    fill(Flag, n, 6.66); // canary flags
+    fill(B, n, 2.0);
+
+    fill(C,n,0.0);
 
     printf("INPUT MATRIXES \n");
 
@@ -92,7 +98,11 @@ int main (int argc, char **argv)
     // printf("Before square_dgemm\n");
     // printf("\n");
 
-  	//square_dgemm (n, A, B, C);
+  	square_dgemm (n, A, B, C);
+    //Direct_Blocked_Copy(n, 2, 2, 3, 3,C, B);
+    //Transposed_Blocked_Copy(n, 2, 2, 3, 3, C, B);
+
+    //extern void Direct_Blocked_Copy(const int lda, const int N, const int K, const int K_Offset, const int J_Offset, double * restrict Out, double * restrict In);
 
     //do_block(n, n, n, n, A, B,  C);
 
@@ -109,7 +119,7 @@ int main (int argc, char **argv)
     //do_block(n, n, n, n, A, B,  C);
 
 
-    Direct_Packed_Blocked_Copy(n, n-1, n, n, 1, 1, C,B);
+    //Direct_Packed_Blocked_Copy(n, n-1, n, n, 1, 1, C,B);
  //Direct_Packed_Blocked_Copy(const int lda, const int block, const int N, const int K, const int K_Offset, const int J_Offset, double * restrict B_Block, const double * restrict B);
     printf("\n");
     printf("After square_dgemm\n");
@@ -126,6 +136,8 @@ int main (int argc, char **argv)
 
     // printMatrix(n,B);
 
+    printf("\n");
+    printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
     printf("\n");
     printf("Matrix C\n");
     printf("\n");
