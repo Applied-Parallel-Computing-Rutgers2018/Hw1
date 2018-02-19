@@ -19,6 +19,11 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 // can use -DBLOCK_SIZE to set block size
 #if !defined(BLOCK_SIZE)
 #define BLOCK_SIZE 41
+#endif
+
+
+#if !defined(BLOCK_SIZE_UPPER)
+#define BLOCK_SIZE_UPPER 512
 #define L2_SIZE_BYTES 8192
 #define L2_SQURED L2_SIZE_BYTES/2/sizeof(double)
 #endif
@@ -29,10 +34,13 @@ void copy_b(int lda, const int K, double *b_src, double *b_dest);
 void transpose(const double *A, double * B, const int lda);
 
 void avx_basic(int lda, int K, double * restrict a, double * restrict b, double * restrict c);
-void Transposed_Packed_Blocked_Copy(const int lda, const int block, const int M, const int K, const int K_Offset, const int i_Offset, double * restrict A_Block, const double * restrict A);
-void Direct_Packed_Blocked_Copy(const int lda, const int block, const int N, const int K, const int K_Offset, const int J_Offset, double * restrict B_Block, const double * restrict B);
+void Transposed_Packed_Blocked_Copy(const int lda, const int block, const int M, const int K, const int K_Offset, const int i_Offset, double * restrict A_Block, double * restrict A);
+void Direct_Packed_Blocked_Copy(const int lda, const int block, const int N, const int K, const int K_Offset, const int J_Offset, double * restrict B_Block, double * restrict B);
 void square_dgemm (int lda, double* A, double* B, double* C);
 void do_block(const int lda, const int M, const int N, const int K, double * restrict A, double *restrict B, double  *restrict C);
+
+
+// enable the printf statements for debugging. GBD is nice but, often things get optimized out 
 
 //#define Test 
 
@@ -178,7 +186,7 @@ inline void square_dgemm (int lda, double* A, double* B, double* C)
 
     double A_Block[BLOCK_SIZE * BLOCK_SIZE + 2 * BLOCK_SIZE];
     //double B_Block[BLOCK_SIZE * BLOCK_SIZE + 2 * BLOCK_SIZE];
-    double C_Block[BLOCK_SIZE * BLOCK_SIZE + 2 * BLOCK_SIZE];
+    //double C_Block[BLOCK_SIZE * BLOCK_SIZE + 2 * BLOCK_SIZE];
 
     double B_Block[lda * lda];
     
@@ -191,58 +199,68 @@ inline void square_dgemm (int lda, double* A, double* B, double* C)
     //Transposed_Packed_Blocked_Copy(lda, const int block, const int M, const int K, const int K_Offset, const int i_Offset, double * restrict A_Block, const double * restrict A)
 
     transpose(B, B_Block,lda);
+    //Transposed_Packed_Blocked_Copy(lda, BLOCK_SIZE, lda, lda,0, 0, B_Block,B);
 
-    // for(int ColCBlock = 0; ColCBlock < lda; ColCBlock += BLOCK_SIZE)
-    // {
-    //     int RowOffset = RowOffset + min (BLOCK_SIZE, lda-ColCBlock);
-
-    //     for(int RowCBlock = 0; RowCBlock < lda; +=BLOCK_SIZE)
-    //     {
-    //         int RowOffset = RowOffset + min (BLOCK_SIZE, lda-RowCBlock);
-
-    //     }
-    // }
-
-
-    for (int j = 0; j < lda; j += BLOCK_SIZE)
+    for(int JColOffset = 0; JColOffset < lda; JColOffset += BLOCK_SIZE_UPPER)
     {
-      /* Correct block dimensions if block "goes off edge of" the matrix */
-       N = min (BLOCK_SIZE, lda-j);
-      /* For each block-row of A */ 
-    
-    for (int k = 0; k < lda; k += BLOCK_SIZE)
-    {
-     /* Correct block dimensions if block "goes off edge of" the matrix */
-        K = min (BLOCK_SIZE, lda-k);
-        //direct_Blocked_Copy(lda, BLOCK_SIZE,N,K, k, j,B_Block,B);
-        //Transposed_Packed_Blocked_Copy(lda, BLOCK_SIZE,N,K,k,j,B_Block,B);
-        //Transposed_Packed_Blocked_Copy(lda, BLOCK_SIZE, N, K,k, j, B_Block,B);
+        int JCollimit = JColOffset + min (BLOCK_SIZE_UPPER, lda-JColOffset);
 
-          for (int i = 0; i < lda; i += BLOCK_SIZE)
-          {
-            /* Correct block dimensions if block "goes off edge of" the matrix */
-              M = min (BLOCK_SIZE, lda-i);
-              //Transposed_Packed_Blocked_Copy(lda, BLOCK_SIZE,M,K,k,i,A_Block,A);
-              //direct_Blocked_Copy(lda, BLOCK_SIZE,N,M, k, j,C_Block,C);
-                      /* Accumulate block dgemms into block of C */
+        for(int KElementCOffset = 0; KElementCOffset<lda; KElementCOffset += BLOCK_SIZE_UPPER )
+        {
+            int KElementlimit = KElementCOffset + min (BLOCK_SIZE_UPPER, lda-KElementCOffset);
 
-              //----------------------------------------------------------------------------------
-        	     /* Perform individual block dgemm */
-        	     //do_block(lda, M, N, K, A + i + k*lda, B + k + j*lda, C + i + j*lda);
-            //-------------------------------------------------------------------------------
-                // B transspose
-                 do_block(lda, M, N, K, A + i + k*lda, B_Block + j + k*lda, C + i + j*lda);
 
-              // new stuff
+            for(int IRowOffset = 0; IRowOffset < lda; IRowOffset +=BLOCK_SIZE_UPPER)
+            {
+                int IRowlimit = IRowOffset + min (BLOCK_SIZE_UPPER, lda-IRowOffset);
 
-                 //do_block(lda, M, N, K, A + i + k*lda, B_Block, C + i + j*lda);
 
-            }
+                    /////////////////////////////////  -------------START INNER LOOPS-------------- ////////////////////////////// 
+                        for (int j = JColOffset; j < JCollimit; j += BLOCK_SIZE)
+                        {
+                          /* Correct block dimensions if block "goes off edge of" the matrix */
+                           N = min (BLOCK_SIZE, JCollimit-j);
+                          /* For each block-row of A */ 
+                        
+                        for (int k = KElementCOffset; k < KElementlimit; k += BLOCK_SIZE)
+                        {
+                         /* Correct block dimensions if block "goes off edge of" the matrix */
+                            K = min (BLOCK_SIZE, KElementlimit-k);
+                            //Transposed_Packed_Blocked_Copy(lda, BLOCK_SIZE,N,K,k,j,B_Block,B);
 
-           // write back C_Block to C
-        }
+                              for (int i = IRowOffset; i < IRowlimit; i += BLOCK_SIZE)
+                              {
+                                /* Correct block dimensions if block "goes off edge of" the matrix */
+                                  M = min (BLOCK_SIZE, IRowlimit-i);
+                                  //Direct_Packed_Blocked_Copy(lda,BLOCK_SIZE,N,K,k,i,A_Block, A);
+                    
+                                
+
+                                /* Accumulate block dgemms into block of C */
+
+                                  //----------------------------------------------------------------------------------
+                            	     /* Perform individual block dgemm */
+                            	     //do_block(lda, M, N, K, A + i + k*lda, B + k + j*lda, C + i + j*lda);
+                                //-------------------------------------------------------------------------------
+                                    // B transspose
+                                     do_block(lda, M, N, K, A + i + k*lda, B_Block + j + k*lda, C + i + j*lda);
+
+                                  // new stuff
+
+                                     //do_block(lda, M, N, K, A + i + k*lda, B_Block, C + i + j*lda);
+
+                                }
+
+                               // write back C_Block to C
+                            }
+                        }
+
+
+                    }
+
+             }
     }
-
+//////////////// end loops 
 
 
 }
@@ -360,35 +378,35 @@ inline void Direct_Copy_4(const int lda, const int K, double * restrict In, doub
 // }
 
 
-inline void Direct_Packed_Blocked_Copy(const int lda, const int block, const int N, const int K, const int K_Offset, const int J_Offset, double * restrict B_Block, const double * restrict B)
+inline void Direct_Packed_Blocked_Copy(const int lda, const int block, const int N, const int K, const int K_Offset, const int J_Offset, double * restrict B_Block, double * restrict B)
 {
 
     register int ColOrginal = 0;
     register int ColMapped = 0;
-    double * Bptr = B + K_Offset;
+    // double * Bptr = B + K_Offset;
 
     for (int J_load = 0; J_load < N; ++J_load)
     {
       ColOrginal = (J_load + J_Offset) *lda; /// the col from the orginal matrix
-      //ColMapped = J_load * block; // the newly mapped index in the blocked matrix
-      ColMapped = J_load * N;
+      ColMapped = J_load * block; // the newly mapped index in the blocked matrix
+      //ColMapped = J_load * N;
       for (int K_load = 0; K_load < K; K_load+=4)
       {
         //j_load = 0
-        // B_Block[K_load + ColMapped] = B[K_load + K_Offset + ColOrginal];
-        // B_Block[K_load + ColMapped + 1] = B[K_load + K_Offset + ColOrginal + 1];
-        // B_Block[K_load + ColMapped + 2] = B[K_load + K_Offset + ColOrginal + 2];
-        // B_Block[K_load + ColMapped + 3] = B[K_load + K_Offset + ColOrginal + 3];
-        B_Block[K_load + ColMapped]     = Bptr[K_load + ColOrginal];
-        B_Block[K_load + ColMapped + 1] = Bptr[K_load + ColOrginal + 1];
-        B_Block[K_load + ColMapped + 2] = Bptr[K_load + ColOrginal + 2];
-        B_Block[K_load + ColMapped + 3] = Bptr[K_load + ColOrginal + 3];
+        B_Block[K_load + ColMapped] = B[K_load + K_Offset + ColOrginal];
+        B_Block[K_load + ColMapped + 1] = B[K_load + K_Offset + ColOrginal + 1];
+        B_Block[K_load + ColMapped + 2] = B[K_load + K_Offset + ColOrginal + 2];
+        B_Block[K_load + ColMapped + 3] = B[K_load + K_Offset + ColOrginal + 3];
+        // B_Block[K_load + ColMapped]     = Bptr[K_load + ColOrginal];
+        // B_Block[K_load + ColMapped + 1] = Bptr[K_load + ColOrginal + 1];
+        // B_Block[K_load + ColMapped + 2] = Bptr[K_load + ColOrginal + 2];
+        // B_Block[K_load + ColMapped + 3] = Bptr[K_load + ColOrginal + 3];
 
       } 
     } 
 }
 
-inline void Transposed_Packed_Blocked_Copy(const int lda, const int block, const int M, const int K, const int K_Offset, const int i_Offset, double * restrict A_Block, const double * restrict A)
+inline void Transposed_Packed_Blocked_Copy(const int lda, const int block, const int M, const int K, const int K_Offset, const int i_Offset, double * restrict A_Block,  double * restrict A)
 {
      //double * Aptr = A + i_Offset;
 

@@ -20,6 +20,7 @@ extern void printMatrix(const int lda,const double* A );
 extern void printMatrixLinear(const int lda,const double* A );
 extern void copy_b(int lda, const int K, double *b_src, double *b_dest);
 extern void transpose(const double *A, double * B, const int lda);
+extern void Direct_Packed_Blocked_Copy(const int lda, const int block, const int N, const int K, const int K_Offset, const int J_Offset, double * restrict B_Block, double * restrict B);
 
 
 // void fill (double* p, int nElements, double FillVal)
@@ -60,7 +61,7 @@ int main (int argc, char **argv)
   /* Test sizes should highlight performance dips at multiples of certain powers-of-two */
 
     double* C = (double*)calloc(3*n*n, sizeof(double));
-    double* Temp = (double*)calloc(3*n*n, sizeof(double));
+    //double* Temp = (double*)calloc(3*n*n, sizeof(double));
     //double C [nsqured];
     
     double A [nsqured];
@@ -91,22 +92,25 @@ int main (int argc, char **argv)
     // printf("Before square_dgemm\n");
     // printf("\n");
 
-  	square_dgemm (n, A, B, C);
+  	//square_dgemm (n, A, B, C);
 
     //do_block(n, n, n, n, A, B,  C);
 
     //copy_b(n, n, B, C);
-    //copy_a(n, n, B, C);
+    //Direct_Copy_4(n, n, B, C);
 
     //transpose(B ,C,n);
     //transpose(B ,Temp,n);
     //do_block(n, n, n, n, A, Temp,  C);
 
     // copy_b(n, n, Temp, C);
-    //copy_a(n, n, Temp, C);
+    //Direct_Copy_4(n, n, Temp, C);
 
     //do_block(n, n, n, n, A, B,  C);
 
+
+    Direct_Packed_Blocked_Copy(n, n-1, n, n, 1, 1, C,B);
+ //Direct_Packed_Blocked_Copy(const int lda, const int block, const int N, const int K, const int K_Offset, const int J_Offset, double * restrict B_Block, const double * restrict B);
     printf("\n");
     printf("After square_dgemm\n");
     printf("\n");
