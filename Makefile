@@ -2,8 +2,8 @@
 
 CC = gcc
 #CC= icc 
-#OPT = -g
-OPT = -O3 -g
+OPT = -g
+#OPT = -O3 -g
 #OPT = -g  
 CFLAGS = -Wall -std=gnu99 -mavx2 -mfma -ftree-vectorize -funroll-loops -fstrict-aliasing -ffast-math $(OPT)
 #CFLAGS = -Wall -std=gnu99 -march=core-avx2 -vec -ftree-vectorize -funroll-loops -fstrict-aliasing $(OPT)
@@ -29,9 +29,9 @@ benchmark-blas : benchmark.o dgemm-blas.o
 benchmark-blocked-sse : benchmark.o dgemm-blocked-sse.o
 	$(CC) -o $@ $^ $(LDLIBS)
 test-blocked: matrixtester.o dgemm-blocked.o
-	$(CC) -DTest -o $@ $^ $(LDLIBS)
+	$(CC) -o $@ $^ $(LDLIBS)
 test-blocked-sse: matrixtester.o dgemm-blocked-sse.o
-	$(CC) -DTest -o $@ $^ $(LDLIBS)
+	$(CC) -o $@ $^ $(LDLIBS)
 	
 %.o : %.c
 	$(CC) -c $(CFLAGS) $<
