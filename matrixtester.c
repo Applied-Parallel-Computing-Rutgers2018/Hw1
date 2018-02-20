@@ -18,11 +18,10 @@ extern void square_dgemm (int, double*, double*, double*);
 extern void do_block(const int lda, const int M, const int N, const int K, double * restrict A, double *restrict B, double  *restrict C);
 extern void printMatrix(const int lda,const double* A );
 extern void printMatrixLinear(const int lda,const double* A );
-extern void copy_b(int lda, const int K, double *b_src, double *b_dest);
 extern void transpose(const double *A, double * B, const int lda);
 extern void Direct_Packed_Blocked_Copy(const int lda, const int block, const int N, const int K, const int K_Offset, const int J_Offset, double * restrict B_Block, double * restrict B);
 extern void Direct_Blocked_Copy(const int lda, const int N, const int K, const int K_Offset, const int J_Offset, double * restrict Out, double * restrict In);
-
+extern void Direct_Copy(const int lda, const M, const int K, double * restrict In, double * restrict Out );
 // void fill (double* p, int nElements, double FillVal)
 // {
 //   for (int i = 0; i < nElements; ++i)
@@ -70,7 +69,7 @@ int main (int argc, char **argv)
     double Flag[nsqured];
     double B [nsqured];
 
-    fill(A, n, 2.0);
+    fillinc(A, n, 2.0);
     fill(Flag, n, 6.66); // canary flags
     fill(B, n, 2.0);
 
@@ -89,7 +88,9 @@ int main (int argc, char **argv)
 
     printMatrix(n,B);
 
+
     printf("\n");
+    printMatrixLinear(n,B);
     printf("\n");
     printf("\n");
     printf("\n");
@@ -98,8 +99,12 @@ int main (int argc, char **argv)
     // printf("Before square_dgemm\n");
     // printf("\n");
 
-  	square_dgemm (n, A, B, C);
-    //Direct_Blocked_Copy(n, 2, 2, 3, 3,C, B);
+  	//square_dgemm (n, A, B, C);
+
+    //Direct_Copy(n, n, n, A, C);
+    Direct_Blocked_Copy(n, 2, 2, 3, 3,B,C);
+
+    //void Direct_Blocked_Copy(const int lda, const int N, const int K,const int J_Offset, const int K_Offset,double * restrict In, double * restrict Out)
     //Transposed_Blocked_Copy(n, 2, 2, 3, 3, C, B);
 
     //extern void Direct_Blocked_Copy(const int lda, const int N, const int K, const int K_Offset, const int J_Offset, double * restrict Out, double * restrict In);
