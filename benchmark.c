@@ -11,7 +11,7 @@
 #include <time.h> // For struct timespec, clock_gettime, CLOCK_MONOTONIC
 #endif
 
-#define MAX_SPEED 42.9  // defining Bridges Max Gflops/s per core with peak TurboBoost Frequency
+#define MAX_SPEED 42.9 // defining Bridges Max Gflops/s per core with peak TurboBoost Frequency
 
 /* reference_dgemm wraps a call to the BLAS-3 routine DGEMM, via the standard FORTRAN interface - hence the reference semantics. */ 
 #define DGEMM dgemm_
